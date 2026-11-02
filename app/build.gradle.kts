@@ -38,7 +38,7 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    testOptions { unitTests.isReturnDefaultValues = true }
+    testOptions { unitTests.isReturnDefaultValues = true; unitTests.isIncludeAndroidResources = true }
 }
 ksp { arg("room.schemaLocation", "$projectDir/schemas") }
 dependencies {
@@ -59,6 +59,10 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.10.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.16.1")
+    testImplementation("androidx.test:core:1.6.1")
+    testImplementation(platform("androidx.compose:compose-bom:2025.08.00"))
+    testImplementation("androidx.compose.ui:ui-test-junit4")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("androidx.room:room-testing:2.7.2")

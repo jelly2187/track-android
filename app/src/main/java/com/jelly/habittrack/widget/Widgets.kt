@@ -15,6 +15,7 @@ import androidx.glance.appwidget.lazy.items
 import androidx.glance.layout.*
 import androidx.glance.text.*
 import androidx.glance.unit.ColorProvider
+import androidx.glance.color.ColorProvider
 import com.jelly.habittrack.MainActivity
 import com.jelly.habittrack.data.*
 import com.jelly.habittrack.habitApp

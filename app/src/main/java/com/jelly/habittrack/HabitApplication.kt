@@ -9,8 +9,8 @@ import com.jelly.habittrack.widget.refreshWidgets
 import kotlinx.coroutines.*
 import java.util.concurrent.TimeUnit
 
-class HabitApplication : Application() {
-    val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+open class HabitApplication : Application() {
+    val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + CoroutineExceptionHandler { _, error -> android.util.Log.e("HabitTrack", "Background reconciliation failed", error) })
     val repository by lazy { Repository(this) }
     val preferences by lazy { Preferences(this) }
     override fun onCreate() {

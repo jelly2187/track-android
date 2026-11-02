@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.*
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.jelly.habittrack.*
+import com.jelly.habittrack.R
 import com.jelly.habittrack.data.*
 import com.jelly.habittrack.reminder.ReminderEngine
 import kotlinx.coroutines.*

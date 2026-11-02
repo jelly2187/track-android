@@ -7,8 +7,8 @@ import kotlinx.coroutines.flow.combine
 import java.time.LocalDate
 import java.util.UUID
 
-class Repository(context: Context) {
-    val db = Room.databaseBuilder(context.applicationContext, HabitDatabase::class.java, "habit-track.db").build()
+class Repository(context: Context, databaseName: String = "habit-track.db") {
+    val db = Room.databaseBuilder(context.applicationContext, HabitDatabase::class.java, databaseName).build()
     val dao = db.habits()
     val changes = combine(dao.watchHabits(), dao.watchGroups(), dao.watchPlans(), dao.watchRecords()) { h, g, p, r -> Snapshot(h, g, p, r) }
     suspend fun snapshot() = db.withTransaction { Snapshot(dao.habits(), dao.groups(), dao.plans(), dao.records()) }

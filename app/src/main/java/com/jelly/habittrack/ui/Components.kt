@@ -53,7 +53,7 @@ import java.time.LocalDate
 }
 
 @Composable fun HabitRow(s: Snapshot, h: Habit, today: LocalDate, onOpen: () -> Unit, onAct: (String, Double) -> Unit, onMove: (Int) -> Unit) {
-    val color = Color(s.color(h)); val done = s.complete(h, today); val record = s.record(h, today)
+    val color = habitAccent(s.color(h)); val done = s.complete(h, today); val record = s.record(h, today)
     val due = s.due(h, today); val target = s.plan(h, today)?.target ?: 1.0
     var menu by remember { mutableStateOf(false) }
     Surface(shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surfaceContainer, modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen)) {
@@ -80,7 +80,7 @@ import java.time.LocalDate
 }
 
 @Composable fun CalendarGrid(s: Snapshot, h: Habit, today: LocalDate, onDay: (LocalDate) -> Unit) {
-    val color = Color(s.color(h)); val first = today.withDayOfMonth(1)
+    val color = habitAccent(s.color(h)); val first = today.withDayOfMonth(1)
     val start = first.minusDays((first.dayOfWeek.value - 1).toLong())
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row { listOf("一", "二", "三", "四", "五", "六", "日").forEach { Text(it, Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center, style = MaterialTheme.typography.labelSmall) } }

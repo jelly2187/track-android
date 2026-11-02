@@ -41,12 +41,16 @@ data class Snapshot(
     val plans: List<HabitPlan> = emptyList(),
     val records: List<CheckIn> = emptyList()
 ) {
-    fun plan(habit: Habit, date: LocalDate) = plans.filter { it.habitId == habit.id && it.fromDate <= date.toString() }.maxByOrNull { it.fromDate }
+    private val recordsByKey by lazy { records.associateBy { it.habitId to it.date } }
+    private val plansByHabit by lazy { plans.groupBy { it.habitId }.mapValues { (_, values) -> values.sortedByDescending { it.fromDate } } }
+    private val streakCache = java.util.concurrent.ConcurrentHashMap<Pair<String, LocalDate>, Pair<Int, Int>>()
+    fun plan(habit: Habit, date: LocalDate) = plansByHabit[habit.id]?.firstOrNull { it.fromDate <= date.toString() }
     fun due(habit: Habit, date: LocalDate): Boolean = date.toString() >= habit.createdDate && plan(habit, date)?.let { Rules.includes(it.days, date) } == true
-    fun record(habit: Habit, date: LocalDate) = records.find { it.habitId == habit.id && it.date == date.toString() }
+    fun record(habit: Habit, date: LocalDate) = recordsByKey[habit.id to date.toString()]
     fun complete(habit: Habit, date: LocalDate) = (record(habit, date)?.value ?: 0.0) + 0.000001 >= (plan(habit, date)?.target ?: Double.MAX_VALUE)
     fun color(habit: Habit) = groups.find { it.id == habit.groupId }?.color ?: PALETTE.first()
     fun streak(habit: Habit, today: LocalDate = LocalDate.now()): Pair<Int, Int> {
+        streakCache[habit.id to today]?.let { return it }
         var current = 0; var longest = 0; var run = 0
         var date = LocalDate.parse(habit.createdDate)
         while (date <= today) {
@@ -57,7 +61,7 @@ data class Snapshot(
             date = date.plusDays(1)
         }
         current = run
-        return current to longest
+        return (current to longest).also { streakCache[habit.id to today] = it }
     }
     fun rate(habit: Habit, start: LocalDate, end: LocalDate): Int {
         var count = 0; var done = 0; var date = maxOf(start, LocalDate.parse(habit.createdDate))

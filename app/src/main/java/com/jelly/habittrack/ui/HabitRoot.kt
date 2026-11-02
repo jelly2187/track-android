@@ -2,6 +2,10 @@
 package com.jelly.habittrack.ui
 
 import android.app.DatePickerDialog
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
@@ -16,9 +20,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.room.withTransaction
 import com.jelly.habittrack.*
 import com.jelly.habittrack.data.*
+import com.jelly.habittrack.reminder.ReminderEngine
 import kotlinx.coroutines.*
 import java.time.*
 import java.time.format.DateTimeFormatter
@@ -33,6 +41,15 @@ import java.time.format.DateTimeFormatter
     var selected by remember { mutableStateOf(initialHabit) }; var editor by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<Habit?>(null) }; var recordDate by remember { mutableStateOf<LocalDate?>(null) }
     var today by remember { mutableStateOf(LocalDate.now()) }
+    var healthRevision by remember { mutableIntStateOf(0) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) { healthRevision++; today = LocalDate.now() } }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    val engine = remember(healthRevision) { ReminderEngine(app) }
+    val permissionRequest = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { healthRevision++; app.scope.launch { app.reconcile() } }
     LaunchedEffect(Unit) { while (true) { today = LocalDate.now(); delay(30_000) } }
     fun execute(block: suspend () -> Unit) { scope.launch { try { withContext(Dispatchers.IO) { block(); app.reconcile() } } catch (e: Exception) { snackbar.showSnackbar(e.message ?: "操作未成功，请重试") } } }
     HabitTheme(settings.theme) {
@@ -66,6 +83,11 @@ import java.time.format.DateTimeFormatter
                             s.groups.forEach { g -> FilterChip(selected = group == g.id, onClick = { group = g.id }, label = { Text(g.name) }, leadingIcon = { Box(Modifier.size(8.dp).background(Color(g.color), androidx.compose.foundation.shape.CircleShape)) }) }
                         } }
                         item { Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { Text("我的习惯", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f)); FilterChip(selected = onlyPending, onClick = { onlyPending = !onlyPending }, label = { Text("只看待办") }) } }
+                        if (active.any { it.reminderEnabled } && (!engine.notificationAllowed() || !engine.precise())) item {
+                            Surface(onClick = { tab = 2 }, shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.secondaryContainer) {
+                                Column(Modifier.fillMaxWidth().padding(16.dp)) { Text("提醒需要完成设置", fontWeight = FontWeight.Bold); Text("点击检查通知权限、准时提醒与后台运行", style = MaterialTheme.typography.bodySmall) }
+                            }
+                        }
                         val visible = active.filter { (group == null || it.groupId == group) && (!onlyPending || (s.due(it, today) && !s.complete(it, today) && s.record(it, today)?.closed != true)) }
                         if (active.isEmpty()) item { EmptyState("从一个小习惯开始", "不用追求完美，让每一次坚持都被看见。", "创建第一个习惯") { editing = null; editor = true } }
                         else if (visible.isEmpty()) item { EmptyState("这里已经清爽了", "当前筛选下没有待办，试试切换分组或查看全部。") }
@@ -82,7 +104,7 @@ import java.time.format.DateTimeFormatter
                         Surface(onClick = { selected = h.id }, shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
                             Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Text(h.name + if (h.archived) " · 已归档" else "", fontWeight = FontWeight.Bold, color = Color(s.color(h)))
-                                Text("近30天完成率 ${s.rate(h, today.minusDays(29), today.minusDays(1))}%  ·  最长连续 ${s.streak(h, today).second} 次", style = MaterialTheme.typography.bodySmall)
+                                Text("近30天完成率 ${s.rate(h, today.minusDays(30), today.minusDays(1))}%  ·  最长连续 ${s.streak(h, today).second} 次", style = MaterialTheme.typography.bodySmall)
                                 RecentWeek(s, h, today, Color(s.color(h)))
                             }
                         }
@@ -92,7 +114,10 @@ import java.time.format.DateTimeFormatter
             }
         }
         if (editor) HabitEditor(s, editing, onDismiss = { editor = false }, onSave = { h, days, target ->
-            scope.launch { try { withContext(Dispatchers.IO) { app.repository.saveHabit(h, days, target); app.reconcile() }; editor = false } catch (e: Exception) { snackbar.showSnackbar(e.message ?: "请检查输入") } }
+            scope.launch { try {
+                withContext(Dispatchers.IO) { app.repository.saveHabit(h, days, target); app.reconcile() }; editor = false
+                if (h.reminderEnabled && Build.VERSION.SDK_INT >= 33 && androidx.core.content.ContextCompat.checkSelfPermission(app, Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) permissionRequest.launch(Manifest.permission.POST_NOTIFICATIONS)
+            } catch (e: Exception) { snackbar.showSnackbar(e.message ?: "请检查输入") } }
         })
         if (habit != null && recordDate != null) RecordDialog(s, habit, recordDate!!, onDismiss = { recordDate = null }, onAction = { mode, value -> val date = recordDate!!; recordDate = null; execute { app.repository.act(habit.id, date, mode, value) } })
     }
