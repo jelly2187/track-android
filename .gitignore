@@ -1,0 +1,12 @@
+.gradle/
+.kotlin/
+**/build/
+.toolchain/
+.idea/
+local.properties
+signing.properties
+*.jks
+*.keystore
+*.log
+artifacts/
+device-test/
