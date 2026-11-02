@@ -58,4 +58,3 @@ class RepositoryJvmTest {
         assertEquals(12.0, repo.snapshot().plan(h, today)!!.target, 0.0)
     }
 }
-
