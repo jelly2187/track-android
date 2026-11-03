@@ -1,5 +1,7 @@
 # Track · HabitTrack
 
+[源码](https://github.com/jelly2187/track-android) · [下载安装包](https://github.com/jelly2187/track-android-releases/releases/latest) · [MIT License](LICENSE)
+
 一款离线安卓习惯打卡应用。原生 Kotlin / Compose Material 3，Room 数据库，AlarmManager 提醒，Glance 桌面小组件。
 
 ## 使用
@@ -64,3 +66,18 @@ Git 使用本地 `main`，按功能提交，验收后标记 `v0.1.0`；构建环
 ```
 
 脚本从签名 APK 读取真实版本、生成 `latest.json`，只上传白名单内的 APK、SHA-256、更新描述及说明；先创建草稿，重新下载核验后再公开。它不会推送本地源码或签名材料，已存在的版本拒绝覆盖。脚本需要 GitHub CLI 登录，默认使用 APK 专用仓库 `jelly2187/track-android-releases`。
+
+## 开源与构建
+
+本项目以 [MIT License](LICENSE) 开源，第三方说明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。公开仓库包含应用源码、测试、数据库结构、构建与发布脚本、文档、提交历史和版本标签。
+
+签名密钥、密码、本机 SDK/JDK、构建缓存、手机备份和个人数据不上传。官方版本继续由 APK 专用发布仓库提供，自动更新地址保持一致。
+
+```bash
+git clone https://github.com/jelly2187/track-android.git
+cd track-android
+# 安装 JDK 17 和 Android SDK，配置 ANDROID_HOME 或 local.properties
+./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
+```
+
+Windows 使用 `gradlew.bat`；PowerShell 可使用现有 `scripts/Build.ps1`。调试构建无需官方签名密钥；自行签名的构建不能覆盖官方 APK，若需与官方版本并存，请为个人构建修改 applicationId。官方升级密钥不会公开。
