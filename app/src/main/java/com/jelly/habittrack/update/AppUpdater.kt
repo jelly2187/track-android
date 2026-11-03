@@ -125,13 +125,23 @@ class UpdateTransport(private val connectionFactory: (URL) -> HttpsURLConnection
 
 private fun ByteArray.hex() = joinToString("") { "%02x".format(it.toInt() and 255) }
 
+fun resolvedUpdateSource(saved: String?, defaultSource: String): String {
+    val legacy = "https://github.com/jelly2187/track-android-releases/releases/latest/download/latest.json"
+    return if (saved.isNullOrBlank() || saved.trim().removeSuffix("/") == legacy) defaultSource else saved
+}
+
 class AppUpdater(private val context: Context, private val transport: UpdateTransport = UpdateTransport()) {
     private val preferences = context.getSharedPreferences("updates", Context.MODE_PRIVATE)
     private val gate = Mutex()
     private val mutableState = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val state = mutableState.asStateFlow()
     private var downloadJob: Job? = null
-    fun source() = preferences.getString("source", BuildConfig.UPDATE_MANIFEST_URL)!!
+    fun source(): String {
+        val saved = preferences.getString("source", null)
+        val current = resolvedUpdateSource(saved, BuildConfig.UPDATE_MANIFEST_URL)
+        if (saved != null && current != saved) preferences.edit().putString("source", current).apply()
+        return current
+    }
     fun automatic() = preferences.getBoolean("automatic", true)
     fun automatic(enabled: Boolean) { preferences.edit().putBoolean("automatic", enabled).apply() }
     fun source(url: String) { requireHttps(url.trim()); preferences.edit().putString("source", url.trim()).apply(); mutableState.value = UpdateState.Idle }

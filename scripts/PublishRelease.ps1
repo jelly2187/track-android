@@ -1,4 +1,4 @@
-param([string]$Repository = 'jelly2187/track-android-releases', [string]$Version = '0.1.1')
+param([string]$Repository = 'jelly2187/track-android', [string]$Version = '0.1.2')
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $projectRoot
@@ -9,12 +9,10 @@ try {
     $login = & $gh api user --jq '.login'
     if ($LASTEXITCODE -ne 0) { throw '请先通过 gh auth login 登录 GitHub，再执行发布。' }
     if ($login.Trim() -ne ($Repository -split '/')[0]) { throw '当前 GitHub 登录账号与目标仓库所有者不一致，已停止。' }
-    $description = 'Track Android APK releases only; no application source or signing material.'
-    $existing = & $gh repo view $Repository --json description --jq '.description' 2>$null
-    if ($LASTEXITCODE -ne 0) {
-        & $gh repo create $Repository --public --description $description --add-readme
-        if ($LASTEXITCODE -ne 0) { throw '无法创建 APK 专用公开仓库' }
-    } elseif ($existing.Trim() -ne $description) { throw '现有仓库不是预期的 APK 专用发布仓库，已停止以避免修改其他项目。' }
+    $existing = & $gh repo view $Repository --json nameWithOwner --jq '.nameWithOwner' 2>$null
+    if ($LASTEXITCODE -ne 0 -or $existing.Trim() -ne $Repository) { throw '目标源码仓库不存在，已停止。' }
+    $origin = git remote get-url origin
+    if ($LASTEXITCODE -ne 0 -or $origin.Trim() -notin @("https://github.com/$Repository.git", "https://github.com/$Repository", "git@github.com:$Repository.git")) { throw '目标发布仓库与当前源码 origin 不一致，已停止以避免修改其他项目。' }
     $folder = Join-Path $projectRoot "artifacts/releases/$Version"
     $manifestPath = Join-Path $folder 'latest.json'
     $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
@@ -23,7 +21,7 @@ try {
     & $gh release view "v$Version" --repo $Repository --json tagName 2>$null | Out-Null
     if ($LASTEXITCODE -eq 0) { throw '此版本已经存在，拒绝覆盖；请递增应用版本后重新构建。' }
     $assets = @($apkPath, $manifestPath, "$apkPath.sha256", (Join-Path $folder 'RELEASE_NOTES.md'))
-    & $gh release create "v$Version" @assets --repo $Repository --draft --title "Track $Version" --notes-file (Join-Path $folder 'RELEASE_NOTES.md')
+    & $gh release create "v$Version" @assets --repo $Repository --target main --draft --title "Track $Version" --notes-file (Join-Path $folder 'RELEASE_NOTES.md')
     if ($LASTEXITCODE -ne 0) { throw '发布草稿或资源上传失败；请检查草稿，尚未公开发布。' }
     $verificationFolder = Join-Path $folder 'remote-verification'
     New-Item -ItemType Directory -Path $verificationFolder -Force | Out-Null

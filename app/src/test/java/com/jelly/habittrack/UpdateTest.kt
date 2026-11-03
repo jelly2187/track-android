@@ -13,6 +13,15 @@ import java.security.cert.Certificate
 import javax.net.ssl.HttpsURLConnection
 
 class UpdateTest {
+    @Test fun migrateLegacySourceAndPreserveCustomAddress() {
+        val current = "https://github.com/jelly2187/track-android/releases/latest/download/latest.json"
+        val legacy = "https://github.com/jelly2187/track-android-releases/releases/latest/download/latest.json"
+        assertEquals(current, resolvedUpdateSource(null, current))
+        assertEquals(current, resolvedUpdateSource(legacy, current))
+        assertEquals(current, resolvedUpdateSource("  $legacy/  ", current))
+        val custom = "https://example.com/track/latest.json"
+        assertEquals(custom, resolvedUpdateSource(custom, current))
+    }
     private val data = "signed APK test fixture".toByteArray()
     private val hash = MessageDigest.getInstance("SHA-256").digest(data).joinToString("") { "%02x".format(it.toInt() and 255) }
     private fun release() = ReleaseManifest(1, 3, "0.1.2", "https://example.com/app.apk", hash, data.size.toLong(), 26, "修复界面")
