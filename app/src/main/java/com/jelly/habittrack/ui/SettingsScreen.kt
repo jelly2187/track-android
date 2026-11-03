@@ -59,16 +59,16 @@ import java.time.*
             scope.launch { withContext(Dispatchers.IO) {
                 val manager = context.getSystemService(android.app.NotificationManager::class.java)
                 manager.createNotificationChannel(android.app.NotificationChannel(ReminderEngine.CHANNEL, "习惯打卡提醒", android.app.NotificationManager.IMPORTANCE_DEFAULT))
-                if (engine.notificationAllowed()) manager.notify(101, androidx.core.app.NotificationCompat.Builder(context, ReminderEngine.CHANNEL).setSmallIcon(R.drawable.ic_notification).setContentTitle("循习 · 测试提醒").setContentText("通知已成功创建。真实习惯提醒会在设定时间到达。").setAutoCancel(true).build())
+                if (engine.notificationAllowed()) manager.notify(101, androidx.core.app.NotificationCompat.Builder(context, ReminderEngine.CHANNEL).setSmallIcon(R.drawable.ic_notification).setContentTitle("Track · 测试提醒").setContentText("通知已成功创建。真实习惯提醒会在设定时间到达。").setAutoCancel(true).build())
                 else onMessage("请先允许通知，并打开习惯打卡提醒渠道")
             } }
         }
         Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.primaryContainer) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("OPPO Find X9 Pro · ColorOS 16 / 17", style = MaterialTheme.typography.titleSmall)
-                Text("在应用管理中允许通知、锁屏通知与后台运行，并检查自启动权限。系统版本不同，入口名称可能变化；可将循习锁定在最近任务中辅助保留。", style = MaterialTheme.typography.bodySmall)
+                Text("在应用管理中允许通知、锁屏通知与后台运行，并检查自启动权限。系统版本不同，入口名称可能变化；可将Track锁定在最近任务中辅助保留。", style = MaterialTheme.typography.bodySmall)
                 Text("Android 14 及以上通知仍可被单独划掉；未确认会在下一次提醒时重新显示。强行停止或关闭通知后，需要重新打开应用或恢复权限。", style = MaterialTheme.typography.bodySmall)
-                TextButton(onClick = { open(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))) }) { Text("打开循习的系统设置") }
+                TextButton(onClick = { open(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))) }) { Text("打开Track的系统设置") }
             }
         }
         SectionLabel("重复提醒")
@@ -81,10 +81,11 @@ import java.time.*
         SectionLabel("颜色分组", "点击分组可修改名称和颜色")
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { s.groups.forEach { g -> AssistChip(onClick = { editingGroup = g; groupDialog = true }, label = { Text(g.name) }, leadingIcon = { Box(Modifier.size(10.dp).background(Color(g.color), CircleShape)) }) }; AssistChip(onClick = { editingGroup = null; groupDialog = true }, label = { Text("＋ 新建") }) }
         SectionLabel("备份与恢复", "包含习惯、分组、计划、打卡历史和设置，不包含桌面小组件实例")
-        OutlinedButton(enabled = !busy, onClick = { export.launch("循习备份-${LocalDate.now()}.json") }, modifier = Modifier.fillMaxWidth()) { Text("导出完整备份") }
+        OutlinedButton(enabled = !busy, onClick = { export.launch("Track备份-${LocalDate.now()}.json") }, modifier = Modifier.fillMaxWidth()) { Text("导出完整备份") }
         OutlinedButton(enabled = !busy, onClick = { import.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }, modifier = Modifier.fillMaxWidth()) { Text("从备份恢复") }
         if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-        SectionLabel("关于循习", "版本 ${BuildConfig.VERSION_NAME} · 离线使用 · 无账号、无广告")
+        UpdateSettings()
+        SectionLabel("关于Track", "版本 ${BuildConfig.VERSION_NAME} · 打卡数据保存在本机 · 无账号、无广告")
         Text("当前设备：${Build.MANUFACTURER} ${Build.MODEL}\nAndroid ${Build.VERSION.RELEASE} / API ${Build.VERSION.SDK_INT}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
     if (groupDialog) GroupDialog(editingGroup, onDismiss = { groupDialog = false }, onSave = { g -> groupDialog = false; work { app.repository.dao.save(g); app.reconcile() } })

@@ -56,7 +56,7 @@ import java.time.format.DateTimeFormatter
         val habit = s.habits.find { it.id == selected }
         Scaffold(snackbarHost = { SnackbarHost(snackbar) }, topBar = {
             if (habit != null) TopAppBar(title = { Text(habit.name) }, navigationIcon = { IconButton(onClick = { selected = null }) { Icon(Icons.Rounded.ArrowBack, "返回") } }, actions = { IconButton(onClick = { editing = habit; editor = true }) { Icon(Icons.Rounded.Edit, "编辑习惯") } })
-            else TopAppBar(title = { Column { Text(if (tab == 0) "循习" else if (tab == 1) "坚持的痕迹" else "设置", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold); if (tab == 0) Text(today.format(DateTimeFormatter.ofPattern("M月d日 EEEE", java.util.Locale.CHINA)), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) } }, actions = { if (tab == 0) IconButton(onClick = { editing = null; editor = true }) { Icon(Icons.Rounded.Add, "新建习惯") } })
+            else TopAppBar(title = { Column { Text(if (tab == 0) "Track" else if (tab == 1) "坚持的痕迹" else "设置", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold); if (tab == 0) Text(today.format(DateTimeFormatter.ofPattern("M月d日 EEEE", java.util.Locale.CHINA)), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) } }, actions = { if (tab == 0) IconButton(onClick = { editing = null; editor = true }) { Icon(Icons.Rounded.Add, "新建习惯") } })
         }, bottomBar = {
             if (habit == null) NavigationBar {
                 listOf("今天" to Icons.Rounded.CheckCircleOutline, "统计" to Icons.Rounded.BarChart, "设置" to Icons.Rounded.Tune).forEachIndexed { i, (name, icon) -> NavigationBarItem(selected = tab == i, onClick = { tab = i }, icon = { Icon(icon, name) }, label = { Text(name) }) }
@@ -120,6 +120,7 @@ import java.time.format.DateTimeFormatter
             } catch (e: Exception) { snackbar.showSnackbar(e.message ?: "请检查输入") } }
         })
         if (habit != null && recordDate != null) RecordDialog(s, habit, recordDate!!, onDismiss = { recordDate = null }, onAction = { mode, value -> val date = recordDate!!; recordDate = null; execute { app.repository.act(habit.id, date, mode, value) } })
+        UpdateHost()
     }
 }
 

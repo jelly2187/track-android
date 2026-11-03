@@ -51,7 +51,7 @@ class HabitListWidget : GlanceAppWidget() {
         provideContent {
             Column(GlanceModifier.fillMaxSize().background(Paper).cornerRadius(22.dp).padding(14.dp)) {
                 Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("循习 · ${today.monthValue}/${today.dayOfMonth}", style = TextStyle(color = Ink, fontWeight = FontWeight.Bold, fontSize = 15.sp), modifier = GlanceModifier.defaultWeight().clickable(actionStartActivity<MainActivity>()))
+                    Text("Track · ${today.monthValue}/${today.dayOfMonth}", style = TextStyle(color = Ink, fontWeight = FontWeight.Bold, fontSize = 15.sp), modifier = GlanceModifier.defaultWeight().clickable(actionStartActivity<MainActivity>()))
                     Text("⚙", modifier = GlanceModifier.padding(8.dp).clickable(configure(context, widgetId)), style = TextStyle(color = Muted))
                 }
                 if (habits.isEmpty()) Text("还没有习惯，点击添加或调整分组", modifier = GlanceModifier.padding(top = 14.dp).clickable(actionStartActivity<MainActivity>()), style = TextStyle(color = Muted, fontSize = 12.sp))

@@ -32,7 +32,7 @@ class WidgetConfigurationActivity : ComponentActivity() {
                 Surface(Modifier.fillMaxSize()) {
                     LazyColumn(Modifier.fillMaxSize().statusBarsPadding(), contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         item { Text(if (calendar) "选择要展示的习惯" else "选择列表分组", style = MaterialTheme.typography.headlineSmall) }
-                        if (options.isEmpty()) item { Text("请先打开循习创建习惯，再添加小组件。") }
+                        if (options.isEmpty()) item { Text("请先打开Track创建习惯，再添加小组件。") }
                         items(options) { (key, title) -> OutlinedButton(onClick = {
                             habitApp.preferences.widget(id, key)
                             scope.launch { refreshWidgets(this@WidgetConfigurationActivity); setResult(RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)); finish() }

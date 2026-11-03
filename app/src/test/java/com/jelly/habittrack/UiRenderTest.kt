@@ -39,7 +39,7 @@ class UiRenderTest {
             HabitTheme(theme) {
                 Surface(Modifier.fillMaxSize()) {
                     Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        Text("循习", style = MaterialTheme.typography.headlineLarge)
+                        Text("Track", style = MaterialTheme.typography.headlineLarge)
                         Text("每天一点，日渐成为", style = MaterialTheme.typography.titleMedium)
                         habits.forEach { h -> HabitRow(s, h, today, {}, { _, amount -> value += amount }, {}) }
                         SectionLabel("十一月的坚持")

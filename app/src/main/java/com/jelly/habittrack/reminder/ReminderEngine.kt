@@ -72,7 +72,7 @@ class ReminderEngine(private val context: Context) {
         }
         if (plan.pending.size > 6) style.setSummaryText("还有 ${plan.pending.size - 6} 项，点击逐项确认")
         val notification = NotificationCompat.Builder(context, CHANNEL)
-            .setSmallIcon(R.drawable.ic_notification).setContentTitle("循习 · 今日还有 ${plan.pending.size} 项")
+            .setSmallIcon(R.drawable.ic_notification).setContentTitle("Track · 今日还有 ${plan.pending.size} 项")
             .setContentText(plan.pending.take(3).joinToString(" · ") { it.name }).setStyle(style)
             .setContentIntent(open).setOngoing(true).setAutoCancel(false).setSilent(quiet || !alert)
             .setCategory(NotificationCompat.CATEGORY_REMINDER).setVisibility(NotificationCompat.VISIBILITY_PRIVATE)

@@ -1,1 +1,1 @@
-<TextView xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:gravity="center" android:text="循习 · 正在载入" android:background="#F6F8F5" android:textColor="#347568"/>
+<TextView xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:gravity="center" android:text="Track · 正在载入" android:background="#F6F8F5" android:textColor="#347568"/>

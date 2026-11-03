@@ -10,14 +10,38 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.jelly.habittrack.data.*
 import java.time.LocalDate
 
 @Composable fun WeekPicker(mask: Int, onChange: (Int) -> Unit) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        listOf("一", "二", "三", "四", "五", "六", "日").forEachIndexed { i, label ->
-            FilterChip(selected = mask and (1 shl i) != 0, onClick = { onChange(mask xor (1 shl i)) }, label = { Text(label) })
+    val fontScale = LocalDensity.current.fontScale
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val minCell = maxOf(40f, 14f * fontScale + 24f).dp
+        val columns = if ((maxWidth - 24.dp) / 7 >= minCell) 7 else 4
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            (0..6).toList().chunked(columns).forEach { row ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    row.forEach { i ->
+                        val label = listOf("一", "二", "三", "四", "五", "六", "日")[i]
+                        val selected = mask and (1 shl i) != 0
+                        Surface(selected = selected, onClick = { onChange(mask xor (1 shl i)) },
+                            modifier = Modifier.weight(1f).heightIn(min = 48.dp).semantics { contentDescription = "星期$label" },
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                            contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant) {
+                            Box(Modifier.padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
+                                Text(label, maxLines = 1, softWrap = false, style = MaterialTheme.typography.labelLarge)
+                            }
+                        }
+                    }
+                    repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
         }
     }
 }

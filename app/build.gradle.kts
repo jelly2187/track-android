@@ -17,8 +17,9 @@ android {
         applicationId = "com.jelly.habittrack"
         minSdk = 26
         targetSdk = 37
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.1.1"
+        buildConfigField("String", "UPDATE_MANIFEST_URL", "\"https://github.com/jelly2187/track-android-releases/releases/latest/download/latest.json\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     if (signing.isNotEmpty()) signingConfigs.create("personal") {
