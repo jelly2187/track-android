@@ -7,7 +7,6 @@ import com.jelly.habittrack.data.*
 import com.jelly.habittrack.reminder.*
 import com.jelly.habittrack.widget.refreshWidgets
 import kotlinx.coroutines.*
-import java.util.concurrent.TimeUnit
 import com.jelly.habittrack.update.AppUpdater
 
 open class HabitApplication : Application() {
@@ -17,8 +16,9 @@ open class HabitApplication : Application() {
     val updater by lazy { AppUpdater(this) }
     override fun onCreate() {
         super.onCreate()
-        WorkManager.getInstance(this).enqueueUniquePeriodicWork("reconcile", ExistingPeriodicWorkPolicy.KEEP,
-            PeriodicWorkRequestBuilder<ReconcileWorker>(30, TimeUnit.MINUTES).build())
+        // Upgrade cleanup: state changes and actual reminders already trigger updates.
+        // Do not poll every 30 minutes when there is no user-requested work to do.
+        WorkManager.getInstance(this).cancelUniqueWork("reconcile")
         scope.launch { reconcile() }
     }
     suspend fun reconcile(alert: Boolean = false) {
@@ -29,6 +29,7 @@ open class HabitApplication : Application() {
 }
 val Context.habitApp get() = applicationContext as HabitApplication
 
+// Retained for a legacy task that may already be starting during an upgrade.
 class ReconcileWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result = try { applicationContext.habitApp.reconcile(); Result.success() } catch (_: Exception) { Result.retry() }
 }

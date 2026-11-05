@@ -35,15 +35,53 @@ class RulesTest {
         val now = day.atTime(9, 7).atZone(ZoneId.of("Asia/Shanghai"))
         val s = Snapshot(listOf(habit), plans = listOf(plan))
         val r = ReminderPlanner.calculate(s, ReminderSettings(), now)
-        assertEquals(1, r.pending.size); assertEquals(LocalTime.of(9, 15), r.next.toLocalTime())
+        assertEquals(1, r.pending.size); assertEquals(LocalTime.of(9, 15), r.next!!.toLocalTime())
         assertEquals(0, ReminderPlanner.calculate(s.copy(records = listOf(CheckIn("h", day.toString(), 30.0))), ReminderSettings(), now).pending.size)
         assertEquals(0, ReminderPlanner.calculate(s.copy(records = listOf(CheckIn("h", day.toString(), 5.0, true))), ReminderSettings(), now).pending.size)
     }
     @Test fun firstReminderAndMidnight() {
         val s = Snapshot(listOf(habit), plans = listOf(plan))
         val morning = ReminderPlanner.calculate(s, ReminderSettings(), day.atTime(8, 0).atZone(ZoneId.of("UTC")))
-        assertTrue(morning.pending.isEmpty()); assertEquals(LocalTime.of(9, 0), morning.next.toLocalTime())
+        assertTrue(morning.pending.isEmpty()); assertEquals(LocalTime.of(9, 0), morning.next!!.toLocalTime())
         val late = ReminderPlanner.calculate(s, ReminderSettings(), day.atTime(23, 59).atZone(ZoneId.of("UTC")))
-        assertEquals(day.plusDays(1).atStartOfDay(ZoneId.of("UTC")), late.next)
+        assertEquals(day.plusDays(1).atTime(9, 0).atZone(ZoneId.of("UTC")), late.next)
+    }
+
+    @Test fun noReminderWorkForEmptyDisabledArchivedOrUnscheduledHabits() {
+        val now = day.atTime(10, 0).atZone(ZoneId.of("UTC"))
+        listOf(Snapshot(), Snapshot(listOf(habit.copy(reminderEnabled = false)), plans = listOf(plan)),
+            Snapshot(listOf(habit.copy(archived = true)), plans = listOf(plan)),
+            Snapshot(listOf(habit.copy(reminderDays = 1)), plans = listOf(plan.copy(days = 2)))
+        ).forEach { snapshot ->
+            val result = ReminderPlanner.calculate(snapshot, ReminderSettings(), now)
+            assertNull(result.next); assertTrue(result.pending.isEmpty())
+        }
+    }
+
+    @Test fun completedWeeklyHabitSchedulesNextWeekInsteadOfDailyWakeups() {
+        val now = day.atTime(10, 0).atZone(ZoneId.of("UTC"))
+        val s = Snapshot(listOf(habit.copy(reminderDays = 2)), plans = listOf(plan.copy(days = 2)),
+            records = listOf(CheckIn(habit.id, day.toString(), plan.target)))
+        val result = ReminderPlanner.calculate(s, ReminderSettings(), now)
+        assertTrue(result.pending.isEmpty())
+        assertEquals(day.plusDays(7).atTime(9, 0).atZone(now.zone), result.next)
+    }
+
+    @Test fun repeatsCanBeDisabledWhileKeepingExplicitReminderTimes() {
+        val now = day.atTime(9, 7).atZone(ZoneId.of("UTC"))
+        val result = ReminderPlanner.calculate(Snapshot(listOf(habit), plans = listOf(plan)), ReminderSettings(interval = 0), now)
+        assertEquals(1, result.pending.size)
+        assertEquals(day.atTime(14, 0).atZone(now.zone), result.next)
+    }
+
+    @Test fun quietHoursDeferRepeatsWithoutDiscardingUserScheduledTimes() {
+        val now = day.atTime(12, 7).atZone(ZoneId.of("UTC"))
+        val settings = ReminderSettings(quietStart = "12:00", quietEnd = "14:00")
+        val morningOnly = Snapshot(listOf(habit.copy(reminderTimes = "09:00")), plans = listOf(plan))
+        assertEquals(day.atTime(14, 0).atZone(now.zone), ReminderPlanner.calculate(morningOnly, settings, now).next)
+        val explicitQuietTime = morningOnly.copy(habits = listOf(habit.copy(reminderTimes = "09:00,13:00")))
+        assertEquals(day.atTime(13, 0).atZone(now.zone), ReminderPlanner.calculate(explicitQuietTime, settings, now).next)
+        val night = day.atTime(23, 7).atZone(now.zone)
+        assertEquals(day.plusDays(1).atTime(9, 0).atZone(now.zone), ReminderPlanner.calculate(morningOnly, ReminderSettings(), night).next)
     }
 }

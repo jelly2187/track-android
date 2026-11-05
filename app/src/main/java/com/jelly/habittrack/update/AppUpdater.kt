@@ -2,15 +2,10 @@ package com.jelly.habittrack.update
 
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageInfo
-import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
-import android.provider.Settings
-import androidx.core.content.FileProvider
 import com.google.gson.Gson
 import com.jelly.habittrack.BuildConfig
-import com.jelly.habittrack.habitApp
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,7 +14,6 @@ import kotlinx.coroutines.sync.withLock
 import java.io.File
 import java.net.URI
 import java.net.URL
-import java.security.MessageDigest
 import javax.net.ssl.HttpsURLConnection
 
 data class ReleaseManifest(
@@ -54,8 +48,6 @@ sealed interface UpdateState {
     data object Checking : UpdateState
     data object Latest : UpdateState
     data class Available(val release: ReleaseManifest) : UpdateState
-    data class Downloading(val release: ReleaseManifest, val percent: Int) : UpdateState
-    data class Ready(val release: ReleaseManifest, val file: File) : UpdateState
     data class Error(val message: String) : UpdateState
 }
 
@@ -99,43 +91,37 @@ class UpdateTransport(private val connectionFactory: (URL) -> HttpsURLConnection
             Gson().fromJson(bytes.toString(Charsets.UTF_8), ReleaseManifest::class.java).validate()
         } finally { connection.disconnect() }
     }
-    suspend fun download(release: ReleaseManifest, temporary: File, progress: (Int) -> Unit) = withContext(Dispatchers.IO) {
-        val connection = open(release.apkUrl)
-        try {
-            val reported = connection.contentLengthLong
-            require(reported <= MAX_APK_BYTES && (reported < 0 || reported == release.sizeBytes)) { "更新包大小与发布信息不符" }
-            val digest = MessageDigest.getInstance("SHA-256"); var total = 0L; var lastPercent = -1
-            connection.inputStream.use { input -> temporary.outputStream().use { output ->
-                val buffer = ByteArray(64 * 1024)
-                while (true) {
-                    currentCoroutineContext().ensureActive()
-                    val count = input.read(buffer); if (count < 0) break
-                    total += count
-                    require(total <= release.sizeBytes && total <= MAX_APK_BYTES) { "更新包超过声明大小" }
-                    output.write(buffer, 0, count); digest.update(buffer, 0, count)
-                    val percent = (total * 100 / release.sizeBytes).toInt()
-                    if (percent != lastPercent) { progress(percent); lastPercent = percent }
-                }
-            } }
-            require(total == release.sizeBytes) { "更新包下载不完整，请重试" }
-            require(digest.digest().hex().equals(release.sha256, true)) { "更新包校验失败，请重新下载" }
-        } finally { connection.disconnect() }
-    }
 }
-
-private fun ByteArray.hex() = joinToString("") { "%02x".format(it.toInt() and 255) }
 
 fun resolvedUpdateSource(saved: String?, defaultSource: String): String {
     val legacy = "https://github.com/jelly2187/track-android-releases/releases/latest/download/latest.json"
     return if (saved.isNullOrBlank() || saved.trim().removeSuffix("/") == legacy) defaultSource else saved
 }
 
+/** Open a reviewable web download page; Track never invokes a package installer. */
+fun updateDownloadPage(release: ReleaseManifest): String {
+    val uri = requireHttps(release.validate().apkUrl)
+    val match = Regex("^/([^/]+)/([^/]+)/releases/download/([^/]+)/[^/]+$").matchEntire(uri.rawPath)
+    return if (uri.host.equals("github.com", true) && uri.port in listOf(-1, 443) && uri.rawQuery == null && match != null)
+        "https://github.com/${match.groupValues[1]}/${match.groupValues[2]}/releases/tag/${match.groupValues[3]}"
+    else uri.toString()
+}
+
+fun updateDownloadIntent(release: ReleaseManifest) = Intent(Intent.ACTION_VIEW, Uri.parse(updateDownloadPage(release)))
+    .addCategory(Intent.CATEGORY_BROWSABLE)
+
 class AppUpdater(private val context: Context, private val transport: UpdateTransport = UpdateTransport()) {
     private val preferences = context.getSharedPreferences("updates", Context.MODE_PRIVATE)
     private val gate = Mutex()
     private val mutableState = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val state = mutableState.asStateFlow()
-    private var downloadJob: Job? = null
+    init {
+        // Remove private APK caches left by the old in-app installer after an upgrade.
+        File(context.cacheDir, "updates").let { directory ->
+            directory.listFiles()?.filter { it.isFile && it.extension == "apk" }?.forEach { it.delete() }
+            directory.delete()
+        }
+    }
     fun source(): String {
         val saved = preferences.getString("source", null)
         val current = resolvedUpdateSource(saved, BuildConfig.UPDATE_MANIFEST_URL)
@@ -145,11 +131,10 @@ class AppUpdater(private val context: Context, private val transport: UpdateTran
     fun automatic() = preferences.getBoolean("automatic", true)
     fun automatic(enabled: Boolean) { preferences.edit().putBoolean("automatic", enabled).apply() }
     fun source(url: String) { requireHttps(url.trim()); preferences.edit().putString("source", url.trim()).apply(); mutableState.value = UpdateState.Idle }
-    fun clearResult() { if (mutableState.value !is UpdateState.Downloading && mutableState.value != UpdateState.Checking) mutableState.value = UpdateState.Idle }
+    fun clearResult() { if (mutableState.value != UpdateState.Checking) mutableState.value = UpdateState.Idle }
     suspend fun check() {
         if (gate.isLocked) return
         gate.withLock {
-            if (mutableState.value is UpdateState.Downloading || mutableState.value is UpdateState.Ready) return@withLock
             mutableState.value = UpdateState.Checking
             try {
                 val release = transport.manifest(source())
@@ -161,51 +146,5 @@ class AppUpdater(private val context: Context, private val transport: UpdateTran
             } catch (cancelled: CancellationException) { mutableState.value = UpdateState.Idle; throw cancelled }
             catch (error: Exception) { mutableState.value = UpdateState.Error(error.message ?: "暂时无法检查更新，请稍后重试") }
         }
-    }
-    fun download(release: ReleaseManifest) {
-        if (downloadJob?.isActive == true) return
-        downloadJob = context.habitApp.scope.launch {
-            gate.withLock {
-                val directory = File(context.cacheDir, "updates").apply { mkdirs() }
-                val temporary = File(directory, "download.part.apk")
-                val completed = File(directory, "release-${release.versionCode}.apk")
-                try {
-                    release.validate()
-                    require(release.newerThan(BuildConfig.VERSION_CODE.toLong(), Build.VERSION.SDK_INT)) { "此版本无需安装" }
-                    directory.listFiles()?.filter { it.isFile }?.forEach { it.delete() }
-                    mutableState.value = UpdateState.Downloading(release, 0)
-                    transport.download(release, temporary) { mutableState.value = UpdateState.Downloading(release, it) }
-                    validateArchive(temporary, release)
-                    check(temporary.renameTo(completed)) { "无法保存已验证的安装包" }
-                    mutableState.value = UpdateState.Ready(release, completed)
-                } catch (cancelled: CancellationException) { mutableState.value = UpdateState.Available(release); throw cancelled }
-                catch (error: Exception) { mutableState.value = UpdateState.Error(error.message ?: "下载失败，请重试") }
-                finally { temporary.delete() }
-            }
-        }
-    }
-    fun cancelDownload() { downloadJob?.cancel() }
-    fun install(activity: android.app.Activity, ready: UpdateState.Ready): Boolean {
-        require(ready.file.isFile && ready.file.length() == ready.release.sizeBytes) { "安装包已失效，请重新下载" }
-        validateArchive(ready.file, ready.release)
-        if (!context.packageManager.canRequestPackageInstalls()) {
-            activity.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}")))
-            return false
-        }
-        val uri = FileProvider.getUriForFile(context, "${context.packageName}.updates", ready.file)
-        activity.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/vnd.android.package-archive").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
-        return true
-    }
-    @Suppress("DEPRECATION")
-    private fun validateArchive(file: File, release: ReleaseManifest) {
-        val manager = context.packageManager
-        val flags = if (Build.VERSION.SDK_INT >= 28) PackageManager.GET_SIGNING_CERTIFICATES else PackageManager.GET_SIGNATURES
-        val candidate = manager.getPackageArchiveInfo(file.absolutePath, flags) ?: error("无法识别下载的 APK")
-        val installed = manager.getPackageInfo(context.packageName, flags)
-        val code = if (Build.VERSION.SDK_INT >= 28) candidate.longVersionCode else candidate.versionCode.toLong()
-        require(candidate.packageName == context.packageName && code == release.versionCode && candidate.versionName == release.versionName && candidate.applicationInfo?.minSdkVersion?.let { it <= Build.VERSION.SDK_INT } == true) { "安装包的应用标识、版本或兼容信息不匹配" }
-        fun signatures(info: PackageInfo): Set<String> = (if (Build.VERSION.SDK_INT >= 28) info.signingInfo?.apkContentsSigners else info.signatures)?.map { MessageDigest.getInstance("SHA-256").digest(it.toByteArray()).hex() }?.toSet().orEmpty()
-        val trusted = signatures(installed)
-        require(trusted.isNotEmpty() && signatures(candidate) == trusted) { "安装包签名不匹配，已阻止安装" }
     }
 }

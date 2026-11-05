@@ -1,4 +1,4 @@
-param([string]$Repository = 'jelly2187/track-android', [string]$Version = '0.1.3')
+param([string]$Repository = 'jelly2187/track-android', [string]$Version = '0.1.4')
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $projectRoot
@@ -20,7 +20,8 @@ try {
     if ($manifest.versionName -ne $Version -or $manifest.apkUrl -ne "https://github.com/$Repository/releases/download/v$Version/Track-v$Version.apk" -or (Get-FileHash -LiteralPath $apkPath -Algorithm SHA256).Hash.ToLowerInvariant() -ne $manifest.sha256) { throw '发布文件或仓库地址与更新描述不一致' }
     & $gh release view "v$Version" --repo $Repository --json tagName 2>$null | Out-Null
     if ($LASTEXITCODE -eq 0) { throw '此版本已经存在，拒绝覆盖；请递增应用版本后重新构建。' }
-    $assets = @($apkPath, $manifestPath, "$apkPath.sha256", (Join-Path $folder 'RELEASE_NOTES.md'))
+    $assets = @($apkPath, $manifestPath, "$apkPath.sha256", (Join-Path $folder 'RELEASE_NOTES.md'),
+        (Join-Path $folder 'PACKAGING_AUDIT.json'), (Join-Path $folder 'PERMISSIONS.txt'), (Join-Path $folder 'VENDOR_REVIEW.md'))
     & $gh release create "v$Version" @assets --repo $Repository --target main --draft --title "Track $Version" --notes-file (Join-Path $folder 'RELEASE_NOTES.md')
     if ($LASTEXITCODE -ne 0) { throw '发布草稿或资源上传失败；请检查草稿，尚未公开发布。' }
     $verificationFolder = Join-Path $folder 'remote-verification'

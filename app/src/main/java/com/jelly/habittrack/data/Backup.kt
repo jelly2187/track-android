@@ -39,7 +39,7 @@ object Backup {
             val p = b.plans.filter { p -> p.habitId == it.habitId && p.fromDate <= it.date }.maxByOrNull { p -> p.fromDate }
             require(p != null && Rules.includes(p.days, LocalDate.parse(it.date)))
         }
-        require(b.settings.interval in listOf(15, 30, 60) && b.settings.theme in listOf("system", "light", "dark"))
+        require(b.settings.interval in listOf(0, 15, 30, 60) && b.settings.theme in listOf("system", "light", "dark"))
         LocalTime.parse(b.settings.quietStart); LocalTime.parse(b.settings.quietEnd)
         return b
     }

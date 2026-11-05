@@ -1,7 +1,7 @@
 param(
     [string]$Repository = 'jelly2187/track-android',
     [string]$ApkPath = 'app/build/outputs/apk/release/app-release.apk',
-    [string]$NotesFile = 'docs/releases/0.1.3.md'
+    [string]$NotesFile = 'docs/releases/0.1.4.md'
 )
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
@@ -17,6 +17,7 @@ try {
     $packageLine = $metadata | Where-Object { $_ -like 'package:*' } | Select-Object -First 1
     if ($packageLine -notmatch "^package: name='com\.jelly\.habittrack' versionCode='(\d+)' versionName='([A-Za-z0-9._-]+)'") { throw '安装包标识与预期不匹配' }
     $versionCode = [long]$Matches[1]; $versionName = $Matches[2]
+    & (Join-Path $PSScriptRoot 'AuditRelease.ps1') -ApkPath $ApkPath -OutputDirectory "artifacts/reports/$versionName" | Out-Null
     $minimumLine = $metadata | Where-Object { $_ -match '^(minSdkVersion|sdkVersion):' } | Select-Object -First 1
     if ($minimumLine -notmatch "'(\d+)'") { throw '无法读取最低安卓版本' }
     $minSdk = [int]$Matches[1]
@@ -36,6 +37,9 @@ try {
     $manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $output 'latest.json') -Encoding utf8NoBOM
     "$digest  $apkName" | Set-Content -LiteralPath (Join-Path $output "$apkName.sha256") -Encoding ascii
     Copy-Item -LiteralPath $NotesFile -Destination (Join-Path $output 'RELEASE_NOTES.md') -Force
+    Copy-Item -LiteralPath "artifacts/reports/$versionName/apk-audit.json" -Destination (Join-Path $output 'PACKAGING_AUDIT.json') -Force
+    Copy-Item -LiteralPath "artifacts/reports/$versionName/apk-permissions.txt" -Destination (Join-Path $output 'PERMISSIONS.txt') -Force
+    Copy-Item -LiteralPath "artifacts/reports/$versionName/VENDOR_REVIEW.md" -Destination (Join-Path $output 'VENDOR_REVIEW.md') -Force
     Write-Output "发布目录：$output"
-    Write-Output '目录只包含 APK、校验文件、更新描述和说明，不包含源码或签名材料。'
+    Write-Output '目录包含 APK、校验文件、更新描述、说明和包结构审计资料，不包含私钥或签名密码。'
 } finally { Pop-Location }

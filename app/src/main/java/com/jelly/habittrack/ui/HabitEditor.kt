@@ -69,7 +69,7 @@ import java.util.UUID
                     s.groups.forEach { g -> FilterChip(group == g.id, { group = g.id }, label = { Text(g.name) }, leadingIcon = { Box(Modifier.size(10.dp).background(Color(g.color), CircleShape)) }) }
                     AssistChip(onClick = { addGroup = true }, label = { Text("新建分组") }, leadingIcon = { Icon(Icons.Rounded.Add, null, Modifier.size(16.dp)) })
                 }
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { SectionLabel("提醒我坚持", "未确认默认每15分钟再次提醒") }; Switch(reminder, { reminder = it }) }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { SectionLabel("提醒我坚持", "开启后按所选日期和时间提醒；重复频率可在设置调整") }; Switch(reminder, { reminder = it }) }
                 if (reminder) {
                     Text("提醒日（与打卡日分别设置）", style = MaterialTheme.typography.bodySmall)
                     WeekPicker(reminderDays) { reminderDays = it }
