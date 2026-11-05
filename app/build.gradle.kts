@@ -17,8 +17,8 @@ android {
         applicationId = "com.jelly.habittrack"
         minSdk = 26
         targetSdk = 37
-        versionCode = 3
-        versionName = "0.1.2"
+        versionCode = 4
+        versionName = "0.1.3"
         buildConfigField("String", "UPDATE_MANIFEST_URL", "\"https://github.com/jelly2187/track-android/releases/latest/download/latest.json\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

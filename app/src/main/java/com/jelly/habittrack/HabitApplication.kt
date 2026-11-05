@@ -22,8 +22,9 @@ open class HabitApplication : Application() {
         scope.launch { reconcile() }
     }
     suspend fun reconcile(alert: Boolean = false) {
-        ReminderEngine(this).reconcile(alert)
-        refreshWidgets(this)
+        // A reminder permission/scheduling failure must not block desktop updates.
+        try { refreshWidgets(this) }
+        finally { ReminderEngine(this).reconcile(alert) }
     }
 }
 val Context.habitApp get() = applicationContext as HabitApplication

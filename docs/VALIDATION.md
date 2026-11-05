@@ -1,5 +1,15 @@
 # 验证记录
 
+## v0.1.3
+
+- 完整构建通过，29 项自动测试全部通过，Android Lint 0 错误；保留依赖版本、编码风格等既有建议。
+- 新增 4 项小组件同步回归测试，使用真实 Room 数据库与 Glance 组合界面树；在同一次加载内验证连续打卡、重复点击去重、App 内完成/撤销/确认未完成、修改目标、补记历史、重新配置和新会话读取。
+- 两类小组件在 `provideContent` 内观察数据库与配置变化。原先只读取初始快照，Glance 复用会话时 `updateAll` 不会重新执行数据读取，导致界面显示旧状态。[官方生命周期说明](https://android.googlesource.com/platform/frameworks/support/+/9b2acdf2ecd36aa5ddf9c43ebfc288ed11d2c49e/glance/glance-appwidget/src/main/java/androidx/glance/appwidget/GlanceAppWidget.kt)
+- 临时回退为静态快照读取时，桌面打卡同步测试按预期失败；还原修复后测试通过。说明测试能捕捉此次问题，而非只验证数据已写入。
+- Glance 1.1.1 的测试工具缓存第一次展平后的界面节点，因此测试改用实际 Glance Applier 与 Recomposer，并在每次断言时读取当前界面树。
+- 保留包名、同一签名与数据库版本，升级可保留记录和已有小组件配置。
+- 未连接实际手机；自动测试不替代 ColorOS 桌面宿主、待机及系统后台调度验证。真机复测应覆盖桌面打卡后列表/日历同步、App 内撤销后返回桌面，以及多小组件同时显示的情况。
+
 ## v0.1.2
 
 - 25 项自动测试通过，Android Lint 无错误；包括旧更新源迁移、自定义地址保留与真实页面截图流程。
