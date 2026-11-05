@@ -1,6 +1,6 @@
 param(
     [string]$ApkPath = 'app/build/outputs/apk/release/app-release.apk',
-    [string]$OutputDirectory = 'artifacts/reports/0.1.5'
+    [string]$OutputDirectory = 'artifacts/reports/0.1.6'
 )
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
@@ -18,12 +18,14 @@ try {
     $allowed = @('android.permission.POST_NOTIFICATIONS', 'android.permission.SCHEDULE_EXACT_ALARM',
         'android.permission.RECEIVE_BOOT_COMPLETED', 'android.permission.INTERNET',
         'android.permission.WAKE_LOCK', 'android.permission.ACCESS_NETWORK_STATE',
+        'android.permission.REQUEST_INSTALL_PACKAGES',
         'com.jelly.habittrack.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION')
     $unexpected = @($permissions | Where-Object { $_ -notin $allowed })
     if ($unexpected.Count) { throw "Unexpected release permission: $($unexpected -join ', ')" }
     foreach ($required in $allowed[0..3]) {
         if ($required -notin $permissions) { throw "Missing expected permission: $required" }
     }
+    if ('android.permission.REQUEST_INSTALL_PACKAGES' -notin $permissions) { throw 'The in-app updater is missing its user-confirmed install permission' }
     $badging = & (Join-Path $buildTools 'aapt2.exe') dump badging $apk
     if ($LASTEXITCODE -ne 0) { throw 'Cannot read APK metadata' }
     $packageLine = $badging | Where-Object { $_ -like 'package:*' } | Select-Object -First 1
@@ -53,6 +55,7 @@ try {
         sizeBytes = (Get-Item -LiteralPath $apk).Length
         permissions = $permissions; embeddedPackages = $embeddedPackages; nativeLibraries = $nativeLibraries
         signatureVerified = $true; debuggable = $false; cleartextTrafficAllowed = $false
+        updateMode = 'In-app HTTPS download; size/hash/package/version/signature checks; user-confirmed system installer'
         scope = 'Packaging and permission audit only; not an antivirus verdict or vendor approval.'
     }
     $report | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $OutputDirectory 'apk-audit.json') -Encoding utf8NoBOM
@@ -68,7 +71,9 @@ try {
 - 源码与检查说明： https://github.com/jelly2187/track-android/blob/main/docs/INSTALLATION_SAFETY.md
 - 签名信息：见同目录 apk-signature.txt，与既有公开版本保持一致。
 
-本版本删除请求安装其他应用的权限及本地安装入口，不携带其他 APK。
+本版本提供应用内更新，声明 REQUEST_INSTALL_PACKAGES，仅安装用户确认的同包名、同签名新版。
+下载和安装前核对大小、SHA-256、包名、版本及签名；通过受限的非导出 FileProvider 只读分享更新文件给系统安装器。
+不携带其他 APK，不自动下载，不在后台自动安装；最终安装需用户在系统界面确认。
 仅按用户主动启用的习惯安排提醒，未开启提醒或通知权限关闭时不安排提醒唤醒。
 删除旧的每 30 分钟全局轮询，静音期间停止重复唤醒，可选择不重复提醒。
 无短信、系统设置写入、悬浮窗、无障碍或全部文件访问权限。

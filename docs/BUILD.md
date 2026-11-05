@@ -37,7 +37,7 @@ Windows 使用 `gradlew.bat`。调试构建无需官方签名密钥；自行签�
 - `reminder`：提醒调度、常驻汇总通知、直接操作与重启恢复。
 - `widget`：列表和日历小组件、独立配置与桌面打卡。
 - `ui`：今日列表、详情、编辑器、设置及更新界面。
-- `update`：HTTPS 版本检查与浏览器发布页入口；不下载 APK 或调用安装器。
+- `update`：HTTPS 版本检查、应用内下载、文件和签名校验、用户确认的系统安装入口；弹窗显示独立于下载状态。
 
 每习惯每天唯一记录。应用、通知和小组件共用写入入口，外部操作绑定日期并去重。目标和计划按生效日期保存，修改不重算过去统计。
 
@@ -59,8 +59,8 @@ https://github.com/jelly2187/track-android/releases/latest/download/latest.json
 
 ```powershell
 ./scripts/Build.ps1
-./scripts/PrepareRelease.ps1 -NotesFile 'docs/releases/0.1.5.md'
-./scripts/PublishRelease.ps1 -Version '0.1.5'
+./scripts/PrepareRelease.ps1 -NotesFile 'docs/releases/0.1.6.md'
+./scripts/PublishRelease.ps1 -Version '0.1.6'
 ```
 
 准备脚本从签名 APK 读取版本，生成包含下载地址、大小和 SHA-256 的 `latest.json`。发布脚本要求 GitHub CLI 已登录，并校验目标仓库与源码 `origin` 一致；上传 APK、校验文件、更新描述、说明及包结构审计资料。先创建草稿、重新下载核验，再正式发布；拒绝覆盖已有版本。

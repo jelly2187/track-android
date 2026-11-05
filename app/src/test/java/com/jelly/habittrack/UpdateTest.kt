@@ -6,6 +6,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
 import java.io.ByteArrayInputStream
+import java.io.File
 import java.net.URL
 import java.security.MessageDigest
 import java.security.cert.Certificate
@@ -46,15 +47,28 @@ class UpdateTest {
     @Test fun rejectHttpsDowngradeRedirect() {
         assertThrows(IllegalArgumentException::class.java) { runBlocking { UpdateTransport { FakeConnection(it, byteArrayOf(), 302, "http://example.com/insecure") }.manifest("https://example.com/latest.json") } }
     }
-    @Test fun githubUpdatesOpenTheReviewableReleasePage() {
-        val url = "https://github.com/jelly2187/track-android/releases/download/v0.1.4/Track-v0.1.4.apk"
-        assertEquals("https://github.com/jelly2187/track-android/releases/tag/v0.1.4", updateDownloadPage(release().copy(apkUrl = url)))
+    @Test fun verifiedDownloadAndProgress() = runBlocking {
+        val file = File.createTempFile("track-update", ".apk")
+        try {
+            var progress = 0
+            UpdateTransport { FakeConnection(it, data) }.download(release(), file) { progress = it }
+            assertArrayEquals(data, file.readBytes()); assertEquals(100, progress)
+        } finally { file.delete() }
     }
-    @Test fun customDownloadLinksArePreservedWithoutTreatingLookalikesAsGithub() {
-        assertEquals(release().apkUrl, updateDownloadPage(release()))
-        val lookalike = "https://github.com.example.com/a/b/releases/download/v1/app.apk"
-        assertEquals(lookalike, updateDownloadPage(release().copy(apkUrl = lookalike)))
-        assertThrows(IllegalArgumentException::class.java) { updateDownloadPage(release().copy(apkUrl = "file:///sdcard/app.apk")) }
+    @Test fun rejectModifiedOrTruncatedApk() {
+        val file = File.createTempFile("track-update", ".apk")
+        try {
+            assertThrows(IllegalArgumentException::class.java) { runBlocking { UpdateTransport { FakeConnection(it, data) }.download(release().copy(sha256 = "0".repeat(64)), file) {} } }
+            assertThrows(IllegalArgumentException::class.java) { runBlocking { UpdateTransport { FakeConnection(it, data.dropLast(1).toByteArray(), reportedSize = data.size.toLong()) }.download(release(), file) {} } }
+        } finally { file.delete() }
+    }
+    @Test fun cachedFileIsRehashedBeforeInstallation() {
+        val file = File.createTempFile("track-update", ".apk")
+        try {
+            file.writeBytes(data); verifyUpdateFile(file, release())
+            file.writeBytes(data.copyOf().also { it[0] = (it[0].toInt() xor 1).toByte() })
+            assertThrows(IllegalArgumentException::class.java) { verifyUpdateFile(file, release()) }
+        } finally { file.delete() }
     }
 }
 

@@ -2,6 +2,8 @@ package com.jelly.habittrack
 
 import android.app.Application
 import android.content.Context
+import android.content.Intent
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.Button
@@ -104,19 +106,28 @@ class UpdatePromptUiTest {
         waitForPrompt()
     }
 
-    @Test fun browserDownloadDismissesPromptAndAutomaticChecksDoNotReopenIt() {
-        val fixture = PromptFixture(compose.activity)
-        val updater = fixture.updater()
-        compose.setContent { HabitTheme("light") { UpdateHost(updater) } }
-        waitForPrompt()
-        compose.onNodeWithText("前往下载").performClick()
-        compose.waitForIdle()
-        val intent = shadowOf(compose.activity).nextStartedActivity
-        assertEquals(updateDownloadPage(fixture.release.get()), intent.dataString)
-        runBlocking { repeat(3) { updater.check() } }
-        compose.waitForIdle()
-        compose.onNodeWithText("前往下载").assertDoesNotExist()
-        assertNull(updater.prompt.value)
+    @Test fun backgroundDownloadProgressAndCompletionDoNotReopenDialog() {
+        DownloadFixture(compose.activity).use { fixture ->
+            val updater = fixture.updater()
+            val generation = mutableIntStateOf(0)
+            compose.setContent { HabitTheme("light") { key(generation.intValue) { UpdateHost(updater) } } }
+            waitForPrompt()
+            compose.onNodeWithText("下载更新").performClick()
+            runBlocking { fixture.awaitProgress(updater, 33) }
+            compose.onNodeWithText("后台下载").performClick()
+            fixture.advance()
+            runBlocking { fixture.awaitProgress(updater, 66) }
+            compose.waitForIdle()
+            compose.onNodeWithText("后台下载").assertDoesNotExist()
+            fixture.finish()
+            compose.waitUntil(10_000) { updater.state.value is UpdateState.Ready }
+            compose.runOnIdle { generation.intValue++ }
+            compose.waitForIdle()
+            compose.onNodeWithText("安装更新").assertDoesNotExist()
+            assertNull(updater.prompt.value)
+            runBlocking { updater.check(manual = true) }
+            compose.onNodeWithText("安装更新").assertIsDisplayed()
+        }
     }
 
     @Test fun longReleaseNotesKeepDismissAndDownloadButtonsReachable() {
@@ -126,9 +137,56 @@ class UpdatePromptUiTest {
         compose.setContent { HabitTheme("light") { UpdateHost(updater) } }
         waitForPrompt()
         compose.onNodeWithText("稍后").assertIsDisplayed()
-        compose.onNodeWithText("前往下载").assertIsDisplayed()
+        compose.onNodeWithText("下载更新").assertIsDisplayed()
         compose.onNodeWithText("稍后").performClick()
         compose.onNodeWithText("稍后").assertDoesNotExist()
+    }
+
+    @Test fun installRequestsPermissionThenUsesTheReadOnlySystemInstaller() {
+        DownloadFixture(compose.activity).use { fixture ->
+            fixture.finish()
+            val updater = fixture.updater()
+            updater.automatic(false)
+            runBlocking { updater.download(fixture.release).join(); updater.check(manual = true) }
+            compose.setContent { HabitTheme("light") { UpdateHost(updater) } }
+            val manager = shadowOf(compose.activity.packageManager)
+            manager.setCanRequestPackageInstalls(false)
+            compose.onNodeWithText("安装更新").performClick()
+            compose.waitUntil(10_000) { shadowOf(compose.activity).peekNextStartedActivity() != null }
+            val permission = shadowOf(compose.activity).nextStartedActivity
+            assertEquals(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, permission.action)
+            assertEquals("package:${compose.activity.packageName}", permission.dataString)
+            compose.waitUntil(10_000) { compose.onAllNodesWithText("请允许 Track 安装应用，返回后再次点击“安装更新”。").fetchSemanticsNodes().isNotEmpty() }
+            manager.setCanRequestPackageInstalls(true)
+            compose.onNodeWithText("安装更新").performClick()
+            compose.waitUntil(10_000) { shadowOf(compose.activity).peekNextStartedActivity() != null }
+            val install = shadowOf(compose.activity).nextStartedActivity
+            assertEquals(Intent.ACTION_VIEW, install.action)
+            assertEquals("application/vnd.android.package-archive", install.type)
+            assertEquals("content", install.data!!.scheme)
+            assertEquals("${compose.activity.packageName}.updates", install.data!!.authority)
+            assertTrue(install.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0)
+            assertEquals(0, install.flags and Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            compose.waitForIdle()
+            assertNull(updater.prompt.value)
+        }
+    }
+
+    @Test fun modifiedReadyFileCannotStartTheSystemInstaller() {
+        DownloadFixture(compose.activity).use { fixture ->
+            fixture.finish()
+            val updater = fixture.updater()
+            updater.automatic(false)
+            runBlocking { updater.download(fixture.release).join(); updater.check(manual = true) }
+            val file = (updater.state.value as UpdateState.Ready).file
+            file.writeBytes(file.readBytes().also { it[0] = (it[0].toInt() xor 1).toByte() })
+            compose.setContent { HabitTheme("light") { UpdateHost(updater) } }
+            shadowOf(compose.activity.packageManager).setCanRequestPackageInstalls(true)
+            compose.onNodeWithText("安装更新").performClick()
+            compose.waitUntil(10_000) { compose.onAllNodesWithText("更新包校验失败，请重新下载").fetchSemanticsNodes().isNotEmpty() }
+            assertNull(shadowOf(compose.activity).peekNextStartedActivity())
+            compose.onNodeWithText("下载更新").assertIsDisplayed()
+        }
     }
 
     private fun waitForPrompt() {

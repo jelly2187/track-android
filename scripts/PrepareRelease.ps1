@@ -1,7 +1,7 @@
 param(
     [string]$Repository = 'jelly2187/track-android',
     [string]$ApkPath = 'app/build/outputs/apk/release/app-release.apk',
-    [string]$NotesFile = 'docs/releases/0.1.5.md'
+    [string]$NotesFile = 'docs/releases/0.1.6.md'
 )
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot

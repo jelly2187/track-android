@@ -2,7 +2,6 @@ package com.jelly.habittrack
 
 import android.app.Application
 import android.content.ComponentName
-import android.content.Intent
 import android.content.pm.PackageManager
 import androidx.test.core.app.ApplicationProvider
 import com.google.gson.Gson
@@ -27,15 +26,27 @@ class AppSafetyTest {
     private val app get() = ApplicationProvider.getApplicationContext<Application>()
 
     @Suppress("DEPRECATION")
-    @Test fun manifestDoesNotRequestInstallerForegroundOrUnrelatedSensitivePermissions() {
+    @Test fun manifestOnlyExposesTheUserConfirmedUpdaterWithNoUnrelatedPermissions() {
         val permissions = requireNotNull(app.packageManager.getPackageInfo(app.packageName, PackageManager.GET_PERMISSIONS).requestedPermissions).toSet()
-        listOf("REQUEST_INSTALL_PACKAGES", "INSTALL_PACKAGES", "FOREGROUND_SERVICE", "WRITE_SETTINGS", "WRITE_SECURE_SETTINGS",
+        assertTrue("android.permission.REQUEST_INSTALL_PACKAGES" in permissions)
+        listOf("INSTALL_PACKAGES", "FOREGROUND_SERVICE", "WRITE_SETTINGS", "WRITE_SECURE_SETTINGS",
             "SEND_SMS", "READ_SMS", "READ_CONTACTS", "QUERY_ALL_PACKAGES", "SYSTEM_ALERT_WINDOW", "MANAGE_EXTERNAL_STORAGE"
         ).forEach { assertFalse("Unexpected permission: $it", "android.permission.$it" in permissions) }
         assertFalse(app.packageManager.getReceiverInfo(ComponentName(app, SystemReceiver::class.java), 0).exported)
+        val provider = requireNotNull(app.packageManager.resolveContentProvider("${app.packageName}.updates", 0))
+        assertFalse(provider.exported)
+        assertTrue(provider.grantUriPermissions)
+        val paths = mutableListOf<Pair<String, String?>>()
+        app.resources.getXml(R.xml.update_paths).use { xml ->
+            while (xml.next() != org.xmlpull.v1.XmlPullParser.END_DOCUMENT) {
+                if (xml.eventType == org.xmlpull.v1.XmlPullParser.START_TAG && xml.name != "paths")
+                    paths += xml.name to xml.getAttributeValue(null, "path")
+            }
+        }
+        assertEquals(listOf("cache-path" to "updates/"), paths)
     }
 
-    @Test fun updateCheckOnlyFetchesManifestAndDownloadActionOnlyOpensHttpsPage() = runBlocking {
+    @Test fun updateCheckDoesNotDownloadOrInstallWithoutUserAction() = runBlocking {
         val release = ReleaseManifest(1, BuildConfig.VERSION_CODE + 1L, "next", "https://github.com/jelly2187/track-android/releases/download/vNext/Track.apk", "a".repeat(64), 100)
         val requests = mutableListOf<String>()
         val updater = AppUpdater(app, UpdateTransport { url ->
@@ -45,20 +56,16 @@ class AppSafetyTest {
         updater.check()
         assertTrue(updater.state.value is UpdateState.Available)
         assertEquals(listOf(updater.source()), requests)
-        val intent = updateDownloadIntent(release)
-        assertEquals(Intent.ACTION_VIEW, intent.action)
-        assertEquals("https://github.com/jelly2187/track-android/releases/tag/vNext", intent.dataString)
-        assertTrue(intent.hasCategory(Intent.CATEGORY_BROWSABLE))
-        assertNull(intent.type)
-        assertEquals(0, intent.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        assertFalse(File(app.cacheDir, "updates/download.part.apk").exists())
     }
 
-    @Test fun updateMigrationOnlyDeletesOldPrivateApkCache() {
+    @Test fun updaterStartupKeepsCachedFilesWithoutAutomaticallyInstallingThem() {
         val directory = File(app.cacheDir, "updates").apply { mkdirs() }
         val apk = File(directory, "release-4.apk").apply { writeText("old update") }
         val unrelated = File(directory, "keep.txt").apply { writeText("keep") }
-        AppUpdater(app)
-        assertFalse(apk.exists())
+        val updater = AppUpdater(app)
+        assertEquals(UpdateState.Idle, updater.state.value)
+        assertTrue(apk.exists())
         assertEquals("keep", unrelated.readText())
     }
 

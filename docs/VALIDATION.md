@@ -1,5 +1,14 @@
 # 验证记录
 
+## v0.1.6
+
+- 完整构建、52 项自动测试通过，Android Lint 0 错误；覆盖后台下载进度/完成不弹窗、取消与残留清理、重复点击去重、同签名缓存复用、错误签名/包名/版本拒绝、安装前重新核验损坏文件、首次授权及系统安装 Intent。
+- 恢复 `REQUEST_INSTALL_PACKAGES`，用途限定为用户主动发起的本应用更新。最终清单继续排除前台服务权限；文件分享 Provider 非导出，只配置 `cache/updates/`，安装 Intent 仅授予临时只读权限。
+- 使用独立的 `UpdateFileProvider`，遵循 [AndroidX FileProvider 的子类使用说明](https://developer.android.com/reference/androidx/core/content/FileProvider)。
+- Robolectric 使用受控下载字节和模拟的 PackageManager 签名信息测试校验策略，不等于实际 APK 安装。Windows 宿主路径分隔符与 Android 不同，URI 交接在测试中模拟；真实 XML 分享范围、Manifest 权限和系统 Intent 分别验证。手机上的授权与安装仍需实际系统确认。
+- 保留 0.1.5 的持久提示关闭机制，下载进度与 Ready 状态不触发新的弹窗。安装包与之前版本使用同一签名和包名，可保留数据覆盖升级。
+- 隐私与使用说明、最终 APK 权限审计已按应用内更新调整；厂商安全复核状态没有变化。
+
 ## v0.1.5
 
 - 完整构建、45 项自动测试通过，Android Lint 0 错误；新增 3 项更新提示状态测试和 3 项真实弹窗交互测试。

@@ -96,8 +96,8 @@ import java.time.*
             Text("习惯、分组、打卡记录和设置保存在本机；无需账号，不接入广告或统计服务。卸载会删除本地记录，备份由你选择导出位置。")
             Text("通知与准时提醒权限用于你主动开启的习惯提醒；开机后恢复计划。未开启提醒或通知权限被关闭时，不安排提醒唤醒。系统设置需要你手动确认，Track 不会自行修改。")
             Text("小组件使用 Android 的后台任务完成短时渲染，不运行前台常驻服务。重复提醒可在设置中关闭；夜间停止重复唤醒，明确设置在静音时段的提醒仍会静默显示。")
-            Text("检查版本时会连接你配置的更新地址，服务器可接收到 IP 地址和 Track 版本等网络请求信息；请求中不包含习惯和打卡记录。可在设置中关闭启动检查，下载仅在你点击后交给浏览器处理。")
-            Text("Track 不申请短信、通讯录、位置、系统设置写入或安装其他应用的权限。完整说明与反馈入口位于开源仓库的 PRIVACY.md。")
+            Text("检查版本与下载更新时会连接你配置的更新地址，服务器可接收到 IP 地址和 Track 版本等网络请求信息；请求中不包含习惯和打卡记录。可关闭启动检查，下载仅在你点击后进行。")
+            Text("安装应用权限仅用于 Track 自身更新。下载与安装前检查文件、包名、版本及签名，由你在系统中确认安装，不在后台自动安装。Track 不申请短信、通讯录、位置或系统设置写入权限。完整说明位于开源仓库的 PRIVACY.md。")
         }
     }, confirmButton = { TextButton(onClick = { privacy = false }) { Text("知道了") } })
     restoring?.let { bundle -> AlertDialog(onDismissRequest = { restoring = null }, title = { Text("替换当前手机上的记录？") }, text = { Text("备份中有 ${bundle.habits.size} 个习惯和 ${bundle.records.size} 条记录。恢复将替换当前数据。建议先导出当前备份；恢复后请重新检查小组件选择的习惯。") }, confirmButton = { TextButton(onClick = { restoring = null; work { Backup.restore(app.repository, bundle); withContext(Dispatchers.Main) { onSettings(bundle.settings) }; app.reconcile(); onMessage("恢复完成") } }) { Text("确认替换") } }, dismissButton = { TextButton(onClick = { restoring = null }) { Text("取消") } }) }

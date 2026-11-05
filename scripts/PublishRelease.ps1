@@ -1,4 +1,4 @@
-param([string]$Repository = 'jelly2187/track-android', [string]$Version = '0.1.5')
+param([string]$Repository = 'jelly2187/track-android', [string]$Version = '0.1.6')
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $projectRoot
