@@ -115,6 +115,8 @@ class AppUpdater(private val context: Context, private val transport: UpdateTran
     private val gate = Mutex()
     private val mutableState = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val state = mutableState.asStateFlow()
+    private val mutablePrompt = MutableStateFlow<ReleaseManifest?>(null)
+    val prompt = mutablePrompt.asStateFlow()
     init {
         // Remove private APK caches left by the old in-app installer after an upgrade.
         File(context.cacheDir, "updates").let { directory ->
@@ -130,9 +132,20 @@ class AppUpdater(private val context: Context, private val transport: UpdateTran
     }
     fun automatic() = preferences.getBoolean("automatic", true)
     fun automatic(enabled: Boolean) { preferences.edit().putBoolean("automatic", enabled).apply() }
-    fun source(url: String) { requireHttps(url.trim()); preferences.edit().putString("source", url.trim()).apply(); mutableState.value = UpdateState.Idle }
-    fun clearResult() { if (mutableState.value != UpdateState.Checking) mutableState.value = UpdateState.Idle }
-    suspend fun check() {
+    fun source(url: String) {
+        requireHttps(url.trim()); preferences.edit().putString("source", url.trim()).apply()
+        mutablePrompt.value = null; mutableState.value = UpdateState.Idle
+    }
+    private fun noticeKey(release: ReleaseManifest) = "${source()}|${release.versionCode}|${release.sha256.lowercase()}"
+    fun dismissPrompt(release: ReleaseManifest) {
+        val key = noticeKey(release)
+        preferences.edit().putString("dismissed_release", key).apply()
+        if (mutablePrompt.value?.let { noticeKey(it) } == key) mutablePrompt.value = null
+    }
+    fun clearResult() {
+        if (mutableState.value != UpdateState.Checking) { mutablePrompt.value = null; mutableState.value = UpdateState.Idle }
+    }
+    suspend fun check(manual: Boolean = false) {
         if (gate.isLocked) return
         gate.withLock {
             mutableState.value = UpdateState.Checking
@@ -143,6 +156,10 @@ class AppUpdater(private val context: Context, private val transport: UpdateTran
                     release.minSdk > Build.VERSION.SDK_INT -> UpdateState.Error("新版需要 Android API ${release.minSdk}，当前手机不兼容")
                     else -> UpdateState.Available(release)
                 }
+                // A check result is not a command to open a dialog. User dismissal
+                // survives new checks, Activity recreation, and process restarts.
+                mutablePrompt.value = if (mutableState.value is UpdateState.Available &&
+                    (manual || preferences.getString("dismissed_release", null) != noticeKey(release))) release else null
             } catch (cancelled: CancellationException) { mutableState.value = UpdateState.Idle; throw cancelled }
             catch (error: Exception) { mutableState.value = UpdateState.Error(error.message ?: "暂时无法检查更新，请稍后重试") }
         }

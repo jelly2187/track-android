@@ -1,6 +1,8 @@
 package com.jelly.habittrack.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -12,28 +14,26 @@ import com.jelly.habittrack.habitApp
 import com.jelly.habittrack.update.*
 import kotlinx.coroutines.launch
 
-@Composable fun UpdateHost() {
+@Composable fun UpdateHost(updater: AppUpdater = LocalContext.current.habitApp.updater) {
     val context = LocalContext.current
-    val updater = context.habitApp.updater
-    val state by updater.state.collectAsStateWithLifecycle()
-    var show by remember { mutableStateOf(false) }
+    val release by updater.prompt.collectAsStateWithLifecycle()
     var error by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(Unit) { if (updater.automatic()) updater.check() }
-    LaunchedEffect(state) { if (state is UpdateState.Available) { show = true; error = null } }
-    val release = (state as? UpdateState.Available)?.release
-    if (show && release != null) AlertDialog(onDismissRequest = { show = false }, title = { Text("Track ${release.versionName}") }, text = {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(release.notes.ifBlank { "有新的应用版本可用。" })
-            Text("${"%.1f".format(release.sizeBytes / 1024.0 / 1024.0)} MB · 覆盖安装保留现有习惯和记录", style = MaterialTheme.typography.bodySmall)
+    LaunchedEffect(updater) { if (updater.automatic()) updater.check() }
+    LaunchedEffect(release) { error = null }
+    release?.let { update -> AlertDialog(onDismissRequest = { updater.dismissPrompt(update) }, title = { Text("Track ${update.versionName}") }, text = {
+        Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(update.notes.ifBlank { "有新的应用版本可用。" })
+            Text("${"%.1f".format(update.sizeBytes / 1024.0 / 1024.0)} MB · 覆盖安装保留现有习惯和记录", style = MaterialTheme.typography.bodySmall)
             Text("前往浏览器查看版本并下载 APK，由你确认系统安装。Track 不申请安装其他应用的权限。", style = MaterialTheme.typography.bodySmall)
+            Text("关闭或前往下载后，本版本不再自动弹出；仍可在设置中手动检查更新。", style = MaterialTheme.typography.bodySmall)
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
     }, confirmButton = {
         TextButton(onClick = {
-            try { context.startActivity(updateDownloadIntent(release)); show = false }
+            try { context.startActivity(updateDownloadIntent(update)); updater.dismissPrompt(update) }
             catch (_: Exception) { error = "无法打开浏览器，请在 GitHub Releases 页面下载更新。" }
         }) { Text("前往下载") }
-    }, dismissButton = { TextButton(onClick = { show = false }) { Text("稍后") } })
+    }, dismissButton = { TextButton(onClick = { updater.dismissPrompt(update) }) { Text("稍后") } }) }
 }
 
 @Composable fun UpdateSettings() {
@@ -55,7 +55,7 @@ import kotlinx.coroutines.launch
         is UpdateState.Error -> "检查失败：${value.message}"
     }, style = MaterialTheme.typography.bodySmall, color = if (state is UpdateState.Error) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
     OutlinedButton(enabled = state != UpdateState.Checking, onClick = {
-        updater.clearResult(); scope.launch { updater.check() }
+        updater.clearResult(); scope.launch { updater.check(manual = true) }
     }, modifier = Modifier.fillMaxWidth()) { Text("检查更新") }
     TextButton(enabled = state != UpdateState.Checking, onClick = { input = source; error = null; edit = true }) { Text("配置更新地址") }
     error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }

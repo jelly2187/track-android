@@ -1,6 +1,6 @@
 param(
     [string]$ApkPath = 'app/build/outputs/apk/release/app-release.apk',
-    [string]$OutputDirectory = 'artifacts/reports/0.1.4'
+    [string]$OutputDirectory = 'artifacts/reports/0.1.5'
 )
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot

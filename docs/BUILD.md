@@ -59,8 +59,8 @@ https://github.com/jelly2187/track-android/releases/latest/download/latest.json
 
 ```powershell
 ./scripts/Build.ps1
-./scripts/PrepareRelease.ps1 -NotesFile 'docs/releases/0.1.4.md'
-./scripts/PublishRelease.ps1 -Version '0.1.4'
+./scripts/PrepareRelease.ps1 -NotesFile 'docs/releases/0.1.5.md'
+./scripts/PublishRelease.ps1 -Version '0.1.5'
 ```
 
 准备脚本从签名 APK 读取版本，生成包含下载地址、大小和 SHA-256 的 `latest.json`。发布脚本要求 GitHub CLI 已登录，并校验目标仓库与源码 `origin` 一致；上传 APK、校验文件、更新描述、说明及包结构审计资料。先创建草稿、重新下载核验，再正式发布；拒绝覆盖已有版本。
