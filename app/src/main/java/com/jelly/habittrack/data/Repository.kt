@@ -28,20 +28,35 @@ class Repository(context: Context, databaseName: String = "habit-track.db") {
         }
     }
 
-    suspend fun act(id: String, date: LocalDate, mode: String, amount: Double = 0.0, token: String = UUID.randomUUID().toString(), external: Boolean = false) {
+    suspend fun act(id: String, date: LocalDate, mode: String, amount: Double = 0.0, token: String = UUID.randomUUID().toString(), external: Boolean = false): Milestone? {
         require(mode in listOf("complete", "increment", "set", "reset", "fail", "reopen"))
-        db.withTransaction {
-            if (dao.handled(token) > 0) return@withTransaction
-            val habit = dao.habit(id) ?: return@withTransaction
-            if (external && (date != LocalDate.now() || habit.archived)) return@withTransaction
-            require(date <= LocalDate.now() && date.toString() >= habit.createdDate)
-            val plan = dao.plan(id, date.toString()) ?: return@withTransaction
-            if (!Rules.includes(plan.days, date)) return@withTransaction
-            val old = dao.record(id, date.toString()) ?: CheckIn(id, date.toString())
-            if (external && (old.closed || old.value >= plan.target)) return@withTransaction
+        return db.withTransaction {
+            if (dao.handled(token) > 0) return@withTransaction null
+            val habit = dao.habit(id) ?: return@withTransaction null
+            val today = LocalDate.now()
+            if (external && (date != today || habit.archived)) return@withTransaction null
+            val recordDate = date.toString()
+            require(date <= today && recordDate >= habit.createdDate)
+            val plan = dao.plan(id, recordDate) ?: return@withTransaction null
+            if (!Rules.includes(plan.days, date)) return@withTransaction null
+            val old = dao.record(id, recordDate) ?: CheckIn(id, recordDate)
+            val wasComplete = Rules.reachesTarget(old.value, plan.target)
+            if (external && (old.closed || wasComplete)) return@withTransaction null
             val value = Rules.progress(old.value, amount, mode, plan.target)
-            dao.save(old.copy(value = value, closed = mode == "fail"))
+            val updated = old.copy(value = value, closed = mode == "fail")
+            // Comparing inside the write transaction prevents two taps from celebrating one unlock.
+            val milestone = if (!external && !wasComplete && Rules.reachesTarget(value, plan.target)) {
+                val history = Snapshot(plans = dao.plansForHabit(id), records = dao.recordsForHabit(id))
+                val previousLongest = history.streak(habit, today).second
+                if (Milestone.nextAfter(previousLongest) == null) null
+                else {
+                    val revised = history.copy(records = history.records.filterNot { it.date == recordDate } + updated)
+                    Milestone.highestNewlyEarned(previousLongest, revised.streak(habit, today).second)
+                }
+            } else null
+            dao.save(updated)
             dao.save(HandledEvent(token))
+            milestone
         }
     }
 }

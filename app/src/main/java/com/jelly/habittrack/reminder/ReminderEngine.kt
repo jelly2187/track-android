@@ -86,16 +86,21 @@ class ReminderEngine(private val context: Context) {
         if (plan.pending.isEmpty() || !allowed) { manager.cancel(NOTIFICATION_ID); return@withLock }
         val quiet = Rules.quiet(now.toLocalTime(), LocalTime.parse(settings.quietStart), LocalTime.parse(settings.quietEnd))
         val open = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java).putExtra("pending", true), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val style = NotificationCompat.InboxStyle().setBigContentTitle("${plan.pending.size} 个习惯等待确认")
-        plan.pending.take(6).forEach { h ->
-            val value = snapshot.record(h, now.toLocalDate())?.value ?: 0.0
-            val target = snapshot.plan(h, now.toLocalDate())!!.target
-            style.addLine(if (h.kind == "COUNT") "${h.name}  ${Rules.number(value)}/${Rules.number(target)} ${h.unit}" else h.name)
+        val today = now.toLocalDate()
+        val copies = plan.pending.take(6).map { reminderCopy(snapshot, it, today) }
+        val style: NotificationCompat.Style = if (plan.pending.size == 1) {
+            NotificationCompat.BigTextStyle().bigText(copies.single().singleExpanded)
+        } else {
+            val inbox = NotificationCompat.InboxStyle().setBigContentTitle("${plan.pending.size} 个习惯等待确认")
+            copies.forEach { inbox.addLine(it.inboxLine) }
+            if (plan.pending.size > copies.size) {
+                inbox.setSummaryText("还有 ${plan.pending.size - copies.size} 项，点击逐项确认")
+            }
+            inbox
         }
-        if (plan.pending.size > 6) style.setSummaryText("还有 ${plan.pending.size - 6} 项，点击逐项确认")
         val notification = NotificationCompat.Builder(context, CHANNEL)
             .setSmallIcon(R.drawable.ic_notification).setContentTitle("Track · 今日还有 ${plan.pending.size} 项")
-            .setContentText(plan.pending.take(3).joinToString(" · ") { it.name }).setStyle(style)
+            .setContentText(copies.first().summary).setStyle(style)
             .setContentIntent(open).setOngoing(true).setAutoCancel(false).setSilent(quiet || !alert)
             .setTimeoutAfter(Duration.between(now, now.toLocalDate().plusDays(1).atStartOfDay(now.zone)).toMillis().coerceAtLeast(1))
             .setCategory(NotificationCompat.CATEGORY_REMINDER).setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
@@ -104,7 +109,7 @@ class ReminderEngine(private val context: Context) {
             fun action(mode: String): PendingIntent {
                 val token = UUID.randomUUID().toString()
                 val actionIntent = Intent(context, ActionReceiver::class.java).setData(android.net.Uri.parse("habittrack://action/$token"))
-                    .putExtra("habit", h.id).putExtra("date", now.toLocalDate().toString()).putExtra("mode", mode).putExtra("token", token)
+                    .putExtra("habit", h.id).putExtra("date", today.toString()).putExtra("mode", mode).putExtra("token", token)
                 return PendingIntent.getBroadcast(context, 0, actionIntent, PendingIntent.FLAG_IMMUTABLE)
             }
             notification.addAction(0, if (h.kind == "COUNT") "+${Rules.number(h.step)} ${h.unit}" else "已完成", action(if (h.kind == "COUNT") "increment" else "complete"))

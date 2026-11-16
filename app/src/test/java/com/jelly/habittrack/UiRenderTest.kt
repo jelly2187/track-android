@@ -28,6 +28,23 @@ class UiRenderTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
     @Test fun lightHabitCardsAndCounterInteraction() = render("light")
     @Test fun darkHabitCardsAndCounterInteraction() = render("dark")
+
+    @Test fun milestoneSectionUpdatesBadgeAndNextTargetOnNarrowScreen() {
+        val progress = mutableStateOf(MilestoneProgress(6, 6))
+        compose.setContent {
+            HabitTheme("light") {
+                Column(Modifier.width(280.dp)) { MilestoneSection(progress.value) }
+            }
+        }
+        compose.onNodeWithText("距连续 7 次徽章还差 1 次").assertIsDisplayed()
+        compose.onNodeWithText("✓ 连续 3 次").assertIsDisplayed()
+        compose.onNodeWithText("连续 100 次").assertIsDisplayed()
+
+        compose.runOnIdle { progress.value = MilestoneProgress(7, 7) }
+        compose.onNodeWithText("✓ 连续 7 次").assertIsDisplayed()
+        compose.onNodeWithText("距连续 14 次徽章还差 7 次").assertIsDisplayed()
+    }
+
     private fun render(theme: String) {
         val today = LocalDate.of(2026, 11, 3)
         val groups = listOf(HabitGroup("health", "健康", PALETTE[0]), HabitGroup("learn", "成长", PALETTE[1]))

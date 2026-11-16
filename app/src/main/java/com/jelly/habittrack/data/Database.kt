@@ -13,6 +13,8 @@ interface HabitDao {
     @Query("SELECT * FROM habit_groups") suspend fun groups(): List<HabitGroup>
     @Query("SELECT * FROM plans") suspend fun plans(): List<HabitPlan>
     @Query("SELECT * FROM checkins") suspend fun records(): List<CheckIn>
+    @Query("SELECT * FROM plans WHERE habitId=:id") suspend fun plansForHabit(id: String): List<HabitPlan>
+    @Query("SELECT * FROM checkins WHERE habitId=:id") suspend fun recordsForHabit(id: String): List<CheckIn>
     @Query("SELECT * FROM habits WHERE id=:id") suspend fun habit(id: String): Habit?
     @Query("SELECT * FROM checkins WHERE habitId=:id AND date=:date") suspend fun record(id: String, date: String): CheckIn?
     @Query("SELECT * FROM plans WHERE habitId=:id AND fromDate<=:date ORDER BY fromDate DESC LIMIT 1") suspend fun plan(id: String, date: String): HabitPlan?

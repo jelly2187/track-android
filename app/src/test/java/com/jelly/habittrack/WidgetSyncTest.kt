@@ -63,6 +63,12 @@ class WidgetSyncTest {
             runBlocking { WidgetCheckAction().onAction(app, object : GlanceId {}, next) }
             ui.awaitText("2/3 杯")
             ui.awaitText("今日 2/3 杯")
+            assertFalse(runBlocking { app.repository.snapshot().milestoneProgress(count, today).earned(Milestone.FIRST) })
+            val finalStep = ui.actionFor(count.id)
+            runBlocking { WidgetCheckAction().onAction(app, object : GlanceId {}, finalStep) }
+            ui.awaitText("已完成 · 连续 1 次")
+            ui.awaitText("今天已完成 ✓")
+            assertTrue(runBlocking { app.repository.snapshot().milestoneProgress(count, today).earned(Milestone.FIRST) })
         }
     }
 

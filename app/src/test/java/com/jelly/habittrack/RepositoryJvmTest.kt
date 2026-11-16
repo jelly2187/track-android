@@ -4,6 +4,8 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import androidx.test.platform.app.InstrumentationRegistry
 import com.jelly.habittrack.data.*
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
 import org.junit.*
 import org.junit.Assert.*
@@ -56,5 +58,31 @@ class RepositoryJvmTest {
         assertEquals(8.0, repo.snapshot().plan(h, today.minusDays(1))!!.target, 0.0)
         assertTrue(repo.snapshot().complete(h, today.minusDays(1)))
         assertEquals(12.0, repo.snapshot().plan(h, today)!!.target, 0.0)
+    }
+
+    @Test fun finalIncrementCelebratesOnceEvenWhenForegroundTapsOverlap() = runBlocking {
+        val h = fixture()
+        assertNull(repo.act(h.id, today, "set", 7.0))
+        val results = List(2) { async { repo.act(h.id, today, "increment", 1.0) } }.awaitAll()
+        assertEquals(listOf(Milestone.FIRST), results.filterNotNull())
+        assertTrue(repo.snapshot().milestoneProgress(h, today).earned(Milestone.FIRST))
+    }
+
+    @Test fun externalCheckinAndRestoreDeriveBadgesWithoutCelebration() = runBlocking {
+        val h = fixture()
+        repo.act(h.id, today.minusDays(2), "complete")
+        repo.act(h.id, today.minusDays(1), "complete")
+        assertNull(repo.act(h.id, today, "complete", external = true))
+        val before = repo.snapshot()
+        assertTrue(before.milestoneProgress(h, today).earned(Milestone.THREE))
+        val backup = Backup.decode(Backup.encode(before, ReminderSettings()))
+        val yesterday = today.minusDays(1)
+        assertNull(repo.act(h.id, yesterday, "reset"))
+        assertFalse(repo.snapshot().milestoneProgress(h, today).earned(Milestone.THREE))
+        assertEquals(Milestone.THREE, repo.act(h.id, yesterday, "complete"))
+        repo.act(h.id, yesterday, "reset")
+        Backup.restore(repo, backup)
+        assertTrue(repo.snapshot().milestoneProgress(h, today).earned(Milestone.THREE))
+        assertNull(repo.act(h.id, today, "complete"))
     }
 }

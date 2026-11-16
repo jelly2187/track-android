@@ -47,7 +47,8 @@ data class Snapshot(
     fun plan(habit: Habit, date: LocalDate) = plansByHabit[habit.id]?.firstOrNull { it.fromDate <= date.toString() }
     fun due(habit: Habit, date: LocalDate): Boolean = date.toString() >= habit.createdDate && plan(habit, date)?.let { Rules.includes(it.days, date) } == true
     fun record(habit: Habit, date: LocalDate) = recordsByKey[habit.id to date.toString()]
-    fun complete(habit: Habit, date: LocalDate) = (record(habit, date)?.value ?: 0.0) + 0.000001 >= (plan(habit, date)?.target ?: Double.MAX_VALUE)
+    fun complete(habit: Habit, date: LocalDate) =
+        Rules.reachesTarget(record(habit, date)?.value ?: 0.0, plan(habit, date)?.target ?: Double.MAX_VALUE)
     fun color(habit: Habit) = groups.find { it.id == habit.groupId }?.color ?: PALETTE.first()
     fun streak(habit: Habit, today: LocalDate = LocalDate.now()): Pair<Int, Int> {
         streakCache[habit.id to today]?.let { return it }
@@ -71,6 +72,7 @@ data class Snapshot(
 }
 
 object Rules {
+    fun reachesTarget(value: Double, target: Double) = value > 0.0 && value + 0.000001 >= target
     fun includes(mask: Int, date: LocalDate) = mask and (1 shl (date.dayOfWeek.value - 1)) != 0
     fun quiet(time: LocalTime, start: LocalTime, end: LocalTime): Boolean = when {
         start == end -> false

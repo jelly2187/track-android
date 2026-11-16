@@ -51,7 +51,23 @@ import java.time.format.DateTimeFormatter
     val engine = remember(healthRevision) { ReminderEngine(app) }
     val permissionRequest = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { healthRevision++; app.scope.launch { app.reconcile() } }
     LaunchedEffect(Unit) { while (true) { today = LocalDate.now(); delay(30_000) } }
-    fun execute(block: suspend () -> Unit) { scope.launch { try { withContext(Dispatchers.IO) { block(); app.reconcile() } } catch (e: Exception) { snackbar.showSnackbar(e.message ?: "操作未成功，请重试") } } }
+    fun <T> execute(onSuccess: suspend (T) -> Unit = {}, block: suspend () -> T) {
+        scope.launch {
+            try {
+                val result = withContext(Dispatchers.IO) { block().also { app.reconcile() } }
+                onSuccess(result)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (e: Exception) {
+                snackbar.showSnackbar(e.message ?: "操作未成功，请重试")
+            }
+        }
+    }
+    fun record(habit: Habit, date: LocalDate, mode: String, value: Double) {
+        execute(onSuccess = { milestone: Milestone? ->
+            if (milestone != null) snackbar.showSnackbar("🏅 ${habit.name} · 解锁${milestone.label}徽章")
+        }) { app.repository.act(habit.id, date, mode, value) }
+    }
     HabitTheme(settings.theme) {
         val habit = s.habits.find { it.id == selected }
         Scaffold(snackbarHost = { SnackbarHost(snackbar) }, topBar = {
@@ -91,7 +107,7 @@ import java.time.format.DateTimeFormatter
                         val visible = active.filter { (group == null || it.groupId == group) && (!onlyPending || (s.due(it, today) && !s.complete(it, today) && s.record(it, today)?.closed != true)) }
                         if (active.isEmpty()) item { EmptyState("从一个小习惯开始", "不用追求完美，让每一次坚持都被看见。", "创建第一个习惯") { editing = null; editor = true } }
                         else if (visible.isEmpty()) item { EmptyState("这里已经清爽了", "当前筛选下没有待办，试试切换分组或查看全部。") }
-                        items(visible, key = { it.id }) { h -> HabitRow(s, h, today, onOpen = { selected = h.id }, onAct = { mode, amount -> execute { app.repository.act(h.id, today, mode, amount) } }, onMove = { delta ->
+                        items(visible, key = { it.id }) { h -> HabitRow(s, h, today, onOpen = { selected = h.id }, onAct = { mode, amount -> record(h, today, mode, amount) }, onMove = { delta ->
                             val i = active.indexOf(h); val other = active.getOrNull(i + delta)
                             if (other != null) execute { app.repository.db.withTransactionCompat { active.forEachIndexed { index, item -> app.repository.dao.save(item.copy(position = when (item.id) { h.id -> i + delta; other.id -> i; else -> index })) } } }
                         }) }
@@ -119,7 +135,7 @@ import java.time.format.DateTimeFormatter
                 if (h.reminderEnabled && Build.VERSION.SDK_INT >= 33 && androidx.core.content.ContextCompat.checkSelfPermission(app, Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) permissionRequest.launch(Manifest.permission.POST_NOTIFICATIONS)
             } catch (e: Exception) { snackbar.showSnackbar(e.message ?: "请检查输入") } }
         })
-        if (habit != null && recordDate != null) RecordDialog(s, habit, recordDate!!, onDismiss = { recordDate = null }, onAction = { mode, value -> val date = recordDate!!; recordDate = null; execute { app.repository.act(habit.id, date, mode, value) } })
+        if (habit != null && recordDate != null) RecordDialog(s, habit, recordDate!!, onDismiss = { recordDate = null }, onAction = { mode, value -> val date = recordDate!!; recordDate = null; record(habit, date, mode, value) })
         UpdateHost()
     }
 }
@@ -127,11 +143,12 @@ import java.time.format.DateTimeFormatter
 private suspend fun androidx.room.RoomDatabase.withTransactionCompat(block: suspend () -> Unit) = withTransaction { block() }
 
 @Composable private fun DetailScreen(s: Snapshot, h: Habit, today: LocalDate, modifier: Modifier, onDate: (LocalDate) -> Unit, onArchive: () -> Unit) {
-    val context = LocalContext.current; val streak = s.streak(h, today)
+    val context = LocalContext.current
+    val progress = s.milestoneProgress(h, today)
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(if (h.note.isBlank()) "让坚持成为生活的自然节奏。" else h.note, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            listOf("当前连续" to "${streak.first} 次", "最长连续" to "${streak.second} 次", "近30天" to "${s.rate(h, today.minusDays(30), today.minusDays(1))}%").forEach { (label, value) ->
+            listOf("当前连续" to "${progress.current} 次", "最长连续" to "${progress.longest} 次", "近30天" to "${s.rate(h, today.minusDays(30), today.minusDays(1))}%").forEach { (label, value) ->
                 Surface(Modifier.weight(1f), shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surfaceContainer) { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { Text(value, style = MaterialTheme.typography.titleLarge, color = Color(s.color(h))); Text(label, style = MaterialTheme.typography.labelMedium) } }
             }
         }
@@ -141,6 +158,7 @@ private suspend fun androidx.room.RoomDatabase.withTransactionCompat(block: susp
         OutlinedButton(onClick = {
             DatePickerDialog(context, { _, y, m, d -> onDate(LocalDate.of(y, m + 1, d)) }, today.year, today.monthValue - 1, today.dayOfMonth).apply { datePicker.maxDate = System.currentTimeMillis(); datePicker.minDate = LocalDate.parse(h.createdDate).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli() }.show()
         }, modifier = Modifier.fillMaxWidth()) { Text("补记 / 修改其他日期") }
+        MilestoneSection(progress)
         Text("提醒：" + if (h.reminderEnabled) h.reminderTimes.replace(",", "、") else "已关闭", style = MaterialTheme.typography.bodyMedium)
         TextButton(onClick = onArchive) { Text(if (h.archived) "恢复这个习惯" else "归档这个习惯") }
     }
